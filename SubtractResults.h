@@ -1,0 +1,111 @@
+class subResult {
+
+  public:
+    subResult() {
+        m_coeff_raw_value.clear();
+        m_coeff_raw_error.clear();
+        m_coeff_sub_value.clear();
+        m_coeff_sub_error.clear();
+        m_coeff_subImp_value.clear();
+        m_coeff_subImp_error.clear();
+    };
+    virtual ~subResult() {};
+
+    void setCoeffRaw(vector<float>& vec_value, vector<float>& vec_error) { 
+        m_coeff_raw_value = vec_value; 
+        m_coeff_raw_error = vec_error; 
+    }
+
+    void setCoeffSub(vector<float>& vec_value, vector<float>& vec_error) { 
+        m_coeff_sub_value = vec_value; 
+        m_coeff_sub_error = vec_error; 
+    }
+
+    void setCoeffSubImp(vector<float>& vec_value, vector<float>& vec_error) { 
+        m_coeff_subImp_value = vec_value; 
+        m_coeff_subImp_error = vec_error; 
+    }
+
+    // methods
+    // most common methods for just v22
+    float getV22RawValue() { if (m_coeff_raw_value.size() > 1) return m_coeff_raw_value[1]; else return 0.;}
+    float getV22RawError() { if (m_coeff_raw_error.size() > 1) return m_coeff_raw_error[1]; else return 0.;}
+    float getV22SubValue() { if (m_coeff_sub_value.size() > 1) return m_coeff_sub_value[1]; else return 0.;}
+    float getV22SubError() { if (m_coeff_sub_error.size() > 1) return m_coeff_sub_error[1]; else return 0.;}
+
+    float getV22SubImpValue() { if (m_coeff_subImp_value.size() > 1) return m_coeff_subImp_value[1]; else return 0.;}
+    float getV22SubImpError() { if (m_coeff_subImp_error.size() > 1) return m_coeff_subImp_error[1]; else return 0.;}
+
+    float getChi2() {return m_fitChi2;}
+    void  setChi2(float _chi2) {m_fitChi2 = _chi2;}
+
+    // advanced usage
+    void  setNHar(int _n) {m_nhar = _n;}
+    float getRhoValue() {return m_rho_value;}
+    float getRhoError() {return m_rho_error;}
+    void  setRhoValue(float _val) {m_rho_value = _val;}
+    void  setRhoError(float _err) {m_rho_error = _err;}
+
+    float getPedstalValue() {return m_pedstalG;}
+    float getPedstalError() {return m_pedstalG_error;}
+    void  setPedstalValue(float _val) {m_pedstalG = _val;}
+    void  setPedstalError(float _err) {m_pedstalG_error = _err;}
+
+    float getCoeffRawValue(int order) {
+        if (order < m_nhar+1) return m_coeff_raw_value[order-1];
+        else return 0;
+    }
+
+    float getCoeffRawError(int order) {
+        if (order < m_nhar+1) return m_coeff_raw_error[order-1];
+        else return 0;
+    }
+
+    float getCoeffSubValue(int order) {
+        if (order < m_nhar+1) return m_coeff_sub_value[order-1];
+        else return 0;
+    }
+
+    float getCoeffSubError(int order) {
+        if (order < m_nhar+1) return m_coeff_sub_error[order-1];
+        else return 0;
+    }
+
+    float getCoeffSubImpValue(int order) {
+        if (order < m_nhar+1) return m_coeff_subImp_value[order-1];
+        else return 0;
+    }
+
+    float getCoeffSubImpError(int order) {
+        if (order < m_nhar+1) return m_coeff_subImp_error[order-1];
+        else return 0;
+    }
+
+    
+  private:
+    // members of flow coefficients
+    // three types to cover usage of different methods
+    // set to zero if certain type is not availble
+
+    // unsubtracted flow coefficients
+    vector<float> m_coeff_raw_value;
+    vector<float> m_coeff_raw_error;
+
+    // subtracted flow coefficients
+    vector<float> m_coeff_sub_value;
+    vector<float> m_coeff_sub_error;
+
+    // subtracted and corrected (for LM flow) fllow coefficeints
+    vector<float> m_coeff_subImp_value;
+    vector<float> m_coeff_subImp_error;
+
+    int m_nhar;
+
+    // additional common fitting parameters
+    float m_pedstalG; //G_HM in case of ATLAS fit
+    float m_pedstalG_error;
+
+    float m_fitChi2;
+    float m_rho_value;
+    float m_rho_error;
+};
