@@ -7,6 +7,13 @@ class CorrelationMaker {
     
     const FlowAnaConfig* m_anaConfig;
     bool m_debug;
+    int m_rebin;
+
+    // index to show which trigger weight function to be applied;
+    // 0 for no trigger weight
+    // 1 for p+Pb HF analysis 
+    // supports for other analysis to be added
+    int m_weightCorrIndex; 
 
     float m_nEtaBinInterval;
     float m_etaBoundary;
@@ -24,6 +31,9 @@ class CorrelationMaker {
     virtual ~CorrelationMaker() {};
     void init();
 
+    void setWeightIndex (int _n) { m_weightCorrIndex = _n; }
+    int  getWeightIndex () { return m_weightCorrIndex; }
+    void setRebin (int _n) { m_rebin = _n; }
     void setDebug (bool _debug) { m_debug = _debug; }
     void setConfig (const FlowAnaConfig* _config) { m_anaConfig = _config; }
     const FlowAnaConfig* getConfig () const { return m_anaConfig; }
@@ -35,6 +45,8 @@ class CorrelationMaker {
     void generateHist_pt();
     // additional dimensions
     void generateHist_bkgSub();
+
+    float weight2016HFAna(int index_Nch);
 
     // main function for generating single 1D correlation histogram
     // method1 -- ATLAS mixed event normalization, projection first, then take ratio (default ATLAS method)
@@ -50,6 +62,8 @@ class CorrelationMaker {
 CorrelationMaker::CorrelationMaker() {
     m_anaConfig = 0;
     m_debug = false;
+    m_rebin = 1;
+    m_weightCorrIndex = 0;
 
     m_nEtaBinInterval = 0.1;
     m_etaBoundary = 5.0;
@@ -74,6 +88,17 @@ void CorrelationMaker::init() {
     //const TH1* _hist = MakeCorr( 1, 1, 1, 1);
 }
 
+
+
+float CorrelationMaker::weight2016HFAna(int index_Nch) {
+    // use 1./lumi for this analysis
+    float _lumi = 1.;
+    if (index_Nch<14) _lumi = 0.082;
+    else if (index_Nch<20) _lumi = 0.687;
+    else if (index_Nch<24) _lumi = 4.394;
+    else _lumi = 55.163;
+    return 1./_lumi;
+}
 
 
 // a little bit wired to have multiplicity cut as float instead of int
@@ -117,15 +142,19 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
     for (int iNch=index_Nch_low; iNch<index_Nch_high+1; iNch++) {
         for (int ipt=index_pt_low; ipt<index_pt_high+1; ipt++) {
 
-            nsig += h2_nsig->GetBinContent(ipt+1, iNch+1);
-            nsigMix += h2_nsigMix->GetBinContent(ipt+1, iNch+1);
-
 	        TH2* htemp_1 = (TH2*)gDirectory->Get(Form("%sNch%d_pt%d",path_sig.c_str(),iNch,ipt));
 	        TH2* htemp_2 = (TH2*)gDirectory->Get(Form("%sNch%d_pt%d",path_mix.c_str(),iNch,ipt));
-            if (!htemp_1->GetDefaultSumw2()) {
-                htemp_1->Sumw2(kTRUE);
-                htemp_2->Sumw2(kTRUE);
+
+            float _weight = 1.;
+            if (getWeightIndex() == 1) {
+                _weight = weight2016HFAna(iNch);
             }
+            // to be extend to support other analysis
+
+            htemp_1->Scale(_weight);
+            htemp_2->Scale(_weight);
+            nsig += h2_nsig->GetBinContent(ipt+1, iNch+1) * _weight;
+            nsigMix += h2_nsigMix->GetBinContent(ipt+1, iNch+1) * _weight;
 
 	        if (iNch==index_Nch_low && ipt==index_pt_low) {
 	            h1 = (TH2*) htemp_1->Clone(Form("h1_Nch%d_%d", index_Nch_low, index_Nch_high));
@@ -240,6 +269,8 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
     delete h1;
     delete h2;
 
+    hphi->Rebin(m_rebin);
+    hphi->Scale(1./m_rebin);
     hphi->SetName(Form("h_pty_dphi_Nch%.0fto%.0f_pt%.0fto%.0f",_Nch_low,_Nch_high,_pt_low,_pt_high));
 
     return hphi;

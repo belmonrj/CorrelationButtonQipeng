@@ -417,7 +417,7 @@ bool NonFlowSubtractor :: plotAtlasHM (TCanvas* theCanvas) {
     int MaxBin = m_hist_HM->GetMaximumBin();
     int MinBin = m_hist_HM->GetMinimumBin();
     float distance = m_hist_HM->GetBinContent(MaxBin) - m_hist_HM->GetBinContent(MinBin);
-    distance /= 4.;
+    distance /= 2.0;
     double Max = m_hist_HM->GetBinContent(MaxBin) + distance;
     double Min = m_hist_HM->GetBinContent(MinBin) - distance;
     m_hist_HM->SetYTitle("#it{Y}(#Delta#it{#phi})");
@@ -442,11 +442,12 @@ bool NonFlowSubtractor :: plotAtlasHM (TCanvas* theCanvas) {
     f_show_periph->SetLineStyle(2);
     f_show_periph->Draw("same");
 
-    plotMarkerLineText(0.25,0.84, 1.2,1, 20, 1,1,"HM Data", 0.05, true);
-    plotMarkerLineText(0.25,0.77, 0, 2, 1, 2, 1,"Fit", 0.05);
-    plotMarkerLineText(0.25,0.70, 0, kSpring+4, 0, kSpring+4, 2,"#it{G} + #it{F}#it{Y}^{LM}", 0.05);
-    plotMarkerLineText(              0.25,0.63, 0, 4, 0, 4, 2,"#it{c}_{2}",0.05);
-    if (!m_fixC3) plotMarkerLineText(0.25,0.56, 0, kOrange+1, 0, kOrange+1, 3,"#it{c}_{3}", 0.05);
+    plotMarkerLineText(0.60, 0.85, 1.2,1, 20, 1,1,"HM Data", 0.05, true);
+    plotMarkerLineText(0.60, 0.78, 0, 2, 1, 2, 1,"Fit", 0.05);
+    plotMarkerLineText(0.60, 0.71, 0, kSpring+4, 0, kSpring+4, 2,"#it{G} + #it{F}#it{Y}^{LM}", 0.05);
+
+    plotMarkerLineText(              0.30,0.13, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}",0.05);
+    if (!m_fixC3) plotMarkerLineText(0.30,0.6, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}", 0.05);
 
     float _chi2 = 0;
     for (int i=1; i<h_pull->GetXaxis()->GetNbins()+1; i++){
@@ -497,7 +498,7 @@ bool NonFlowSubtractor :: plotAtlasHM (TCanvas* theCanvas) {
     line_p2->Draw("SAME");
     line_m2->Draw("SAME");
 
-    myText( 0.65, 0.44, 1, Form("#it{#chi}^{2}/ndof = %.2f",_chi2), 0.12);
+    plotText( 0.65, 0.44, 1, Form("#it{#chi}^{2}/ndof = %.2f",_chi2), 0.12);
 
     pad1->cd();
     return true;
@@ -614,6 +615,6 @@ bool NonFlowSubtractor :: plotAtlasLM (TCanvas* theCanvas) {
     line_m2->SetLineWidth(2);
     line_m2->Draw("SAME");
 
-    myText( 0.65, 0.44, 1, Form("#it{#chi}^{2}/ndof = %.2f",_chi2), 0.12);
+    plotText( 0.65, 0.44, 1, Form("#it{#chi}^{2}/ndof = %.2f",_chi2), 0.12);
     return true;
 }
