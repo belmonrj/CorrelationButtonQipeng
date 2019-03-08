@@ -78,8 +78,6 @@ class NonFlowSubtractor {
     //---------------------------------
     // Different subtraction method
     //---------------------------------
-    
- 
   public:
     //---------------------------------
     // Atlas template fit method, if hist_LM2 = 0, the 1 step correction (HION-2017-07) will be applied to cX_corr_value in subResult
@@ -89,6 +87,9 @@ class NonFlowSubtractor {
 
     // corrected version with non-zeor hist_LM2
     subResult templateFit(TH1* hist_LM, TH1* hist_HM, TH1* hist_LM2);
+
+    // corrected version with external cn_LM value and error
+    subResult templateFit(TH1* hist_LM, TH1* hist_HM, float cn_LM, float cn_LM_error);
 
     //---------------------------------
     // peripheral subtraction used by CMS
@@ -105,6 +106,13 @@ class NonFlowSubtractor {
     subResult periphSub  (TH1* h_sr_lm,  TH1* h_lr_lm, 
                           TH1* h_sr_hm,  TH1* h_lr_hm, 
                           TH1* h_sr_lm2, TH1* h_lr_lm2);
+
+    // corrected version with external cn_LM value and error
+    //subResult periphSub  (TH1* h_sr_lm,  TH1* h_lr_lm, 
+    //                      TH1* h_sr_hm,  TH1* h_lr_hm, 
+    //                      float cn_LM,  float cn_LM_error);
+
+
     //---------------------------------
     // Direct Fourier fit
     //---------------------------------
@@ -183,7 +191,7 @@ void NonFlowSubtractor :: init() {
     }
     _formula += (") )");
 
-    if (m_debug) cout << "Fourier function: " << _formula.c_str() << endl;
+    if (m_debug) cout << "Fourier function: " << _formula.c_str() << endl << endl;
 
     // initial ATLAS method
     m_nparLmAtlas = getNHar() + 1;
@@ -208,15 +216,18 @@ void NonFlowSubtractor :: init() {
     m_parName_HM.push_back("G_temp");
 
     if (m_debug) {
-        cout << "ATLAS fit parameters:" << endl;
+        cout << " ===================================================" << endl;
+        cout << " ATLAS template fitting parameterization:" << endl;
         cout << "  number of LM event parameters:" << m_nparLmAtlas << endl;
         for (int ipar=0; ipar < m_parName_LM.size(); ipar++) {
             cout << "   parameter "  << ipar << " :" << m_parName_LM.at(ipar).c_str() << endl;       
         }
+        cout << endl;
         cout << "  number of HM event parameters:" << m_nparHmAtlas << endl;
         for (int ipar=0; ipar < m_parName_HM.size(); ipar++) {
             cout << "   parameter "  << ipar << " :" << m_parName_HM.at(ipar).c_str() << endl;       
         }
+        cout << endl;
     }
 
 

@@ -52,35 +52,43 @@ class subResult {
     void  setPedstalError(float _err) {m_pedstalG_error = _err;}
 
     float getCoeffRawValue(int order) {
-        if (order < m_nhar+1) return m_coeff_raw_value[order-1];
+        if (order < m_nhar+1 && m_coeff_raw_value.size() > order-1) return m_coeff_raw_value[order-1];
         else return 0;
     }
 
     float getCoeffRawError(int order) {
-        if (order < m_nhar+1) return m_coeff_raw_error[order-1];
+        if (order < m_nhar+1 && m_coeff_raw_value.size() > order-1) return m_coeff_raw_error[order-1];
         else return 0;
     }
 
     float getCoeffSubValue(int order) {
-        if (order < m_nhar+1) return m_coeff_sub_value[order-1];
+        if (order < m_nhar+1 && m_coeff_sub_value.size() > order-1) return m_coeff_sub_value[order-1];
         else return 0;
     }
 
     float getCoeffSubError(int order) {
-        if (order < m_nhar+1) return m_coeff_sub_error[order-1];
+        if (order < m_nhar+1 && m_coeff_sub_value.size() > order-1) return m_coeff_sub_error[order-1];
         else return 0;
     }
 
     float getCoeffSubImpValue(int order) {
-        if (order < m_nhar+1) return m_coeff_subImp_value[order-1];
+        if (order < m_nhar+1 && m_coeff_subImp_value.size() > order-1) return m_coeff_subImp_value[order-1];
         else return 0;
     }
 
     float getCoeffSubImpError(int order) {
-        if (order < m_nhar+1) return m_coeff_subImp_error[order-1];
+        if (order < m_nhar+1 && m_coeff_subImp_value.size() > order-1) return m_coeff_subImp_error[order-1];
         else return 0;
     }
 
+    float getRhoCorrelation(int order) {
+        if (order < m_nhar+1 && m_correlation_rho_flowCoeff.size() > order-1) return m_correlation_rho_flowCoeff[order-1];
+        else return 0;
+    }
+
+    void setRhoCorrelation(vector<float>& vec) { 
+        m_correlation_rho_flowCoeff = vec; 
+    }
     
   private:
     // members of flow coefficients
@@ -108,4 +116,5 @@ class subResult {
     float m_fitChi2;
     float m_rho_value;
     float m_rho_error;
+    vector<float> m_correlation_rho_flowCoeff;
 };

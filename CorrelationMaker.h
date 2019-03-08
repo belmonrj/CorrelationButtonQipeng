@@ -194,7 +194,7 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
 
         float int_S = m_h1_sig->Integral();
 
-        hphi = (TH1*)m_h1_sig->Clone(Form("hphi_pt%d", index_pt_low));
+        hphi = (TH1*)m_h1_sig->Clone(Form("_hphi"));
         hphi->Divide(m_h1_mix);
 
         float int_C = hphi->Integral();
@@ -205,20 +205,24 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
         // ATLAS style mixed event normalization
         // take 2D ratio, then project to 1D
         
-        // start with d^{2}N_{pair}/(deta dphi)
-        float int_S = h1->Integral();
+        // start with N_{pair}
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
+        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
+        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
+        float int_S = m_h1_sig->Integral();
 
         h1->Scale(1./h1->Integral());
         h2->Scale(1./h2->Integral());
         TH2F* h_correlation = (TH2F*)h1->Clone();
         h_correlation->Divide(h2);
-        float int_C = h_correlation->Integral();
-        float K = int_S / int_C;
-        h_correlation->Scale(K/nsig, "width"); //per trigger & per deltaPhi yield
 
-        hphi    = h_correlation->ProjectionY(Form("h_sig_phi_Nch%d", index_Nch_low), m_etaBinIndexLow, m_jetEtaIndexLow-1, "e");
-        hphi->Add(h_correlation->ProjectionY(Form("h_sig_phi2_Nch%d",index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh, "e"));
-        hphi->Scale(1./(nbins_low + nbins_high));
+        hphi    = h_correlation->ProjectionY(Form("h_phi_Nch%d", index_Nch_low), m_etaBinIndexLow, m_jetEtaIndexLow-1, "e");
+        hphi->Add(h_correlation->ProjectionY(Form("h_phi2_Nch%d",index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh, "e"));
+
+        float int_C = hphi->Integral();
+        float K = int_S / int_C;
+        hphi->Scale(K/nsig, "width"); //per trigger & per deltaPhi yield
 
     } else if (method == 3) { 
         // CMS style mixed event normalization
@@ -239,7 +243,7 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
         m_h1_sig->Scale(1./(nbins_low + nbins_high));
         m_h1_mix->Scale(1./(nbins_low + nbins_high));
 
-        hphi = (TH1*)m_h1_sig->Clone(Form("hphi_pt%d", index_pt_low));
+        hphi = (TH1*)m_h1_sig->Clone(Form("_hphi"));
         hphi->Divide(m_h1_mix);
     } else if (method == 4) {
         // CMS style mixed event normalization
@@ -259,7 +263,14 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
 
     } else if (method == 5) {
         // no mixing applied
-        // place holder for now
+        // copied from method 1
+
+        // Make projections first
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
+
+        hphi = (TH1*)m_h1_sig->Clone(Form("_hphi"));
+        hphi->Scale(1./nsig, "width"); //per trigger & per deltaPhi yield
 
     } else {
         cout << "method is not supported, please choose from 1~3" << endl;
@@ -271,7 +282,7 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
 
     hphi->Rebin(m_rebin);
     hphi->Scale(1./m_rebin);
-    hphi->SetName(Form("h_pty_dphi_Nch%.0fto%.0f_pt%.0fto%.0f",_Nch_low,_Nch_high,_pt_low,_pt_high));
+    hphi->SetName(Form("h_pty_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.0fto%.0f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
 
     return hphi;
 }

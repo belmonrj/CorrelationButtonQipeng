@@ -2,6 +2,7 @@
 
 
 subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
+    // procedure largely based on https://root.cern/doc/master/combinedFit_8C_source.html
 
     const int Npar(2*getNHar()+3);
     const int Npar_LM(getNHar()+1);
@@ -46,12 +47,6 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     parInitValues.at(Npar-2) = 5.;
     parInitValues.at(Npar-1) = _init_HM.getPedstalValue();
 
-    if (m_debug) {
-        for (int i=0; i<Npar; i++) { 
-            cout << i << ": " << parInitValues.at(i) << endl;
-        }
-    }
-
     ROOT::Math::WrappedMultiTF1 wf_LM(*f_LM, 1);
     ROOT::Math::WrappedMultiTF1 wf_HM(*f_HM, 1);
     ROOT::Fit::DataOptions opt;
@@ -82,31 +77,32 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     }
     
     if (m_debug) {
-        cout << "Fit parameter configurations: " << endl;
+        cout << " ===================================================" << endl;
+        cout << " Running ATLAS template fitting with the following initial values: " << endl;
         for (int ipar = 0; ipar < fitter.Config().NPar(); ipar++) {
-            cout << "parameter " << ipar << ":\tname = " << fitter.Config().ParSettings(ipar).Name().c_str() << ",\tvalue = " << fitter.Config().ParSettings(ipar).Value() << endl;
+            cout << "   parameter " << ipar << ":\t\tname = " << fitter.Config().ParSettings(ipar).Name().c_str() << ",\t\tvalue = " << fitter.Config().ParSettings(ipar).Value() << endl;
         }
+        cout << endl;
     }
 
     fitter.FitFCN(Npar, globalChi2, 0, data_LM.Size()+data_HM.Size(), true);
 
     ROOT::Fit::FitResult result = fitter.Result();
-    result.Print(std::cout);
-    //result.PrintCovMatrix(std::cout);
-
-    vector<float> vec_value_sub;
-    vector<float> vec_error_sub;
-    for (int ihar=0; ihar<getNHar(); ihar++){
-        vec_value_sub.push_back(result.Value   (Npar_LM+ihar) );
-        vec_error_sub.push_back(result.ParError(Npar_LM+ihar) );
+    if (m_debug) {
+        result.Print(std::cout);
+        result.PrintCovMatrix(std::cout);
     }
-    theResult.setCoeffSub(vec_value_sub, vec_error_sub);
+
     double _value_F_temp = result.Value   (Npar-2);
     double _error_F_temp = result.ParError(Npar-2);
 
     double _value_rho_atlas = (_value_G_LM*_value_F_temp)/_value_G_HM;
-    // naive error estimation
-    double _error_rho_atlas = _value_rho_atlas*sqrt(pow(_error_G_LM/_value_G_LM, 2) + pow(_error_G_HM/_value_G_HM, 2));
+
+    // Ignore the correlations between G_HM/G_LM (from Fourier fit) and F_temp
+    // It's dominated by contribution from F_temp any way
+    double _error_rho_atlas = _value_rho_atlas*sqrt(pow(_error_G_LM/_value_G_LM, 2) 
+                                                  + pow(_error_G_HM/_value_G_HM, 2)
+                                                  + pow(_error_F_temp/_value_F_temp,2));
 
     theResult.setNHar(getNHar());
     theResult.setChi2(result.Chi2() / result.Ndf());
@@ -115,11 +111,42 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     theResult.setRhoValue (_value_rho_atlas);
     theResult.setRhoError (_error_rho_atlas);
 
+    vector<float> vec_value_sub;
+    vector<float> vec_error_sub;
+    vector<float> vec_correlation;
+    for (int ihar=0; ihar<getNHar(); ihar++){
+        vec_value_sub.push_back(result.Value   (Npar_LM+ihar) );
+        vec_error_sub.push_back(result.ParError(Npar_LM+ihar) );
+        // F-coefficient correlation is used for rho-coefficient correlation
+        // used for improved fit error calculation
+        vec_correlation.push_back(result.Correlation(Npar-2, Npar_LM+ihar)*(_value_G_LM/_value_G_HM) );
+    }
+    theResult.setCoeffSub(vec_value_sub, vec_error_sub);
+    theResult.setRhoCorrelation(vec_correlation);
+
     if (m_debug) {
-        cout << "_value_G_LM = " << _value_G_LM << endl;
-        cout << "_value_G_HM = " << _value_G_HM << endl;
-        cout << "_value_F_temp = " << _value_F_temp << endl;
-        cout << "rho = " << _value_rho_atlas << endl;
+        cout << endl;
+        cout << " ===================================================" << endl;
+        cout << " Check relative errors" << endl;
+        cout << "   G_LM\tvalue = " << _value_G_LM 
+             << "\terror = " << _error_G_LM 
+             << "\trel_error = " << _error_G_LM/ _value_G_LM 
+             << endl;
+
+        cout << "   G_HM\tvalue = " << _value_G_HM 
+             << "\terror = " << _error_G_HM 
+             << "\trel_error = " << _error_G_HM/ _value_G_HM 
+             << endl;
+
+        cout << "   F_temp\tvalue= " << _value_F_temp 
+             << "\terror = " << _error_F_temp 
+             << "\trel_error = " << _error_F_temp/ _value_F_temp 
+             << endl;
+
+        cout << "   rho\tvalue = " << _value_rho_atlas 
+             << "\terror = " << _error_rho_atlas 
+             << "\trel_error = " << _error_rho_atlas/_value_rho_atlas 
+             << endl << endl;
     }
 
     // construct stuffs for plotting
@@ -164,17 +191,10 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     f_show_flow3->SetParameter(1, result.Value(Npar - 1));
     f_show_flow3->SetParameter(2, result.Value(getNHar()+3)); // c3
 
-    if (m_debug) {
-        // double check the parameter assignment is corrected
-        cout << "c2 = " << result.Value(getNHar()+2) << endl;
-        cout << "c3 = " << result.Value(getNHar()+3) << endl;
-        cout << "G_temp = " << result.Value(Npar - 1) << endl;
-        cout << "F_temp = " << result.Value(Npar - 2) << endl;
-    }
-
     m_hist_HM = (TH1F*)hist_HM->Clone("__hist_HM");
     m_hist_LM = (TH1F*)hist_LM->Clone("__hist_LM");
 
+    cout << endl;
     //delete f_LM; f_LM = 0;
     //delete f_HM; f_HM = 0;
     return theResult;
@@ -191,28 +211,118 @@ subResult NonFlowSubtractor::templateFit (TH1* hist_LM,  TH1* hist_HM, TH1* hist
     NonFlowSubtractor subLM2;
     subLM2.setNHar(NonFlowSubtractor::m_nhar);
     subLM2.init();
+    if (m_debug) {
+        cout << endl;
+        cout << " ===================================================" << endl;
+        cout << " Running default template fitting to LM2 for obtaining correction" << endl;
+    }
     subResult result_lm2 = subLM2.templateFit(hist_LM, hist_LM2);
 
     vector<float> vec_subImp_value;
     vector<float> vec_subImp_error;
     for (int ihar=0; ihar<getNHar(); ihar++){
         float _rho      = result_hm .getRhoValue();
+        float _rho_error= result_hm .getRhoError();
         float _coeff_hm = result_hm .getCoeffSubValue(ihar+1);
         float _error_hm = result_hm .getCoeffSubError(ihar+1);
         float _coeff_lm = result_lm2.getCoeffSubValue(ihar+1);
         float _error_lm = result_lm2.getCoeffSubError(ihar+1);
 
+        float _correlaiton = result_hm .getRhoCorrelation(ihar+1);
+
         //ignore error on rho
         float _coeff_corrected = _coeff_hm - _rho*(_coeff_hm - _coeff_lm);
-        float _error = sqrt( pow((1-_rho)*_error_hm,2) + pow( _rho*_error_lm,2)); // to be improved
-        if (_coeff_hm == 0) _error = 0; // protection for c1 = 0
+        float _error = sqrt( pow((1-_rho)*_error_hm,2) 
+                           + pow( _rho*_error_lm,2)
+                           + pow( (_coeff_hm-_coeff_lm)*_rho_error,2)
+                           - 2*(1-_rho)*(_coeff_hm-_coeff_lm)*(_rho_error*_error_hm*_correlaiton)
+                           // ignore correlation between C_LM and rho/C_HM
+                           ); // to be improved
 
-        if (m_debug) cout << ihar << ",\t" << _coeff_hm << ",\t" << _coeff_lm << ",\t" << _coeff_lm << endl;
+        //special case for error estimation
+        if (_coeff_hm == _coeff_lm) _error = _error_hm; // using HM as LM2, error should stay the same as before improving
+        if (_coeff_hm == 0) _error = 0; // protection for n=1 when c1 == 0;
 
         vec_subImp_value.push_back(_coeff_corrected);
         vec_subImp_error.push_back(_error);
     }
     result_hm.setCoeffSubImp(vec_subImp_value, vec_subImp_error);
+
+    if (m_debug) {
+        cout << " ===================================================" << endl;
+        cout << std::setprecision(5) << " Improved template fitting results: " << endl;
+        cout << "  -unsubtracted:\t v22 value = " << result_hm.getV22RawValue() 
+             << ",\terror = " << result_hm.getV22RawError() 
+             << ",\trel_error = " << result_hm.getV22RawError()/result_hm.getV22RawValue() << endl;
+
+        cout << "  -default method:\t v22 value = " << result_hm.getV22SubValue() 
+             << ",\terror = " << result_hm.getV22SubError() 
+             << ",\trel_error = " << result_hm.getV22SubError()/result_hm.getV22SubValue() << endl;
+
+        cout << "  -improved method:\t v22 value = " << result_hm.getV22SubImpValue() 
+             << ",\terror = " << result_hm.getV22SubImpError() 
+             << ",\trel_error = " << result_hm.getV22SubImpError()/result_hm.getV22SubImpValue() << endl << endl;
+    }
+
+    return result_hm;
+}
+
+
+
+subResult NonFlowSubtractor::templateFit (TH1* hist_LM,  TH1* hist_HM, float cn_LM, float cn_LM_error) {
+
+    subResult result_hm  = templateFit(hist_LM, hist_HM);
+    if (m_debug) {
+        cout << endl;
+        cout << " ===================================================" << endl;
+        cout << " Running default template fitting with external cn_LM input" << endl;
+    }
+
+    vector<float> vec_subImp_value;
+    vector<float> vec_subImp_error;
+    for (int ihar=0; ihar<getNHar(); ihar++){
+        float _rho      = result_hm .getRhoValue();
+        float _rho_error= result_hm .getRhoError();
+        float _coeff_hm = result_hm .getCoeffSubValue(ihar+1);
+        float _error_hm = result_hm .getCoeffSubError(ihar+1);
+        float _coeff_lm = cn_LM;
+        float _error_lm = cn_LM_error;
+
+        float _correlaiton = result_hm .getRhoCorrelation(ihar+1);
+
+        //ignore error on rho
+        float _coeff_corrected = _coeff_hm - _rho*(_coeff_hm - _coeff_lm);
+        float _error = sqrt( pow((1-_rho)*_error_hm,2) 
+                           + pow( _rho*_error_lm,2)
+                           + pow( (_coeff_hm-_coeff_lm)*_rho_error,2)
+                           - 2*(1-_rho)*(_coeff_hm-_coeff_lm)*(_rho_error*_error_hm*_correlaiton)
+                           // ignore correlation between C_LM and rho/C_HM
+                           ); // to be improved
+
+        //special case for error estimation
+        if (_coeff_hm == _coeff_lm) _error = _error_hm; // using HM as LM2, error should stay the same as before improving
+        if (_coeff_hm == 0) _error = 0; // protection for n=1 when c1 == 0;
+
+        vec_subImp_value.push_back(_coeff_corrected);
+        vec_subImp_error.push_back(_error);
+    }
+    result_hm.setCoeffSubImp(vec_subImp_value, vec_subImp_error);
+
+    if (m_debug) {
+        cout << " ===================================================" << endl;
+        cout << std::setprecision(5) << " Improved template fitting results: " << endl;
+        cout << "  -unsubtracted:\t v22 value = " << result_hm.getV22RawValue() 
+             << ",\terror = " << result_hm.getV22RawError() 
+             << ",\trel_error = " << result_hm.getV22RawError()/result_hm.getV22RawValue() << endl;
+
+        cout << "  -default method:\t v22 value = " << result_hm.getV22SubValue() 
+             << ",\terror = " << result_hm.getV22SubError() 
+             << ",\trel_error = " << result_hm.getV22SubError()/result_hm.getV22SubValue() << endl;
+
+        cout << "  -improved method:\t v22 value = " << result_hm.getV22SubImpValue() 
+             << ",\terror = " << result_hm.getV22SubImpError() 
+             << ",\trel_error = " << result_hm.getV22SubImpError()/result_hm.getV22SubImpValue() << endl << endl;
+    }
 
     return result_hm;
 }
@@ -267,6 +377,16 @@ subResult NonFlowSubtractor::periphSub  ( TH1* h_sr_lm, TH1* h_lr_lm,
     TH1F* h_sub_hm = (TH1F*)h_sr_hm->Clone("h_sub_hm");
     h_sub_hm->Add(h_lr_hm, -1);
 
+    // should be very careful here. 
+    // if one follows the CMS paper to make PTY (2D ratio then projection to 1D dphi correlation), ZYAM is not necessary
+    // on the other hand, if you follows the ATPAS paper, ZYAM must be applied
+    if (m_applyZYAM) {
+        ZYAM(h_sub_lm);
+        ZYAM(h_sub_hm);
+    }
+
+    // hard coded here for now.
+    // Could make them as data members
     int dphiBin_low  = h_sub_lm->FindBin(-1.2);
     int dphiBin_high = h_sub_lm->FindBin(1.2);
     
@@ -335,10 +455,10 @@ subResult NonFlowSubtractor::periphSub  (TH1* h_sr_lm,  TH1* h_lr_lm,
     vector<float> vec_subImp_error;
     for (int ihar=0; ihar<getNHar(); ihar++){
         float _rho      = result_hm .getRhoValue();
-        float _coeff_hm = result_hm .getCoeffSubValue(ihar);
-        float _error_hm = result_hm .getCoeffSubError(ihar);
-        float _coeff_lm = result_lm2.getCoeffSubValue(ihar);
-        float _error_lm = result_lm2.getCoeffSubError(ihar);
+        float _coeff_hm = result_hm .getCoeffSubValue(ihar+1);
+        float _error_hm = result_hm .getCoeffSubError(ihar+1);
+        float _coeff_lm = result_lm2.getCoeffSubValue(ihar+1);
+        float _error_lm = result_lm2.getCoeffSubError(ihar+1);
 
         float _coeff_corrected = _coeff_hm + _rho*(_coeff_lm);
         float _error = sqrt(pow(_error_hm,2) + pow(_rho*_error_lm,2)); // ignore error on rho, to be improved
@@ -442,12 +562,12 @@ bool NonFlowSubtractor :: plotAtlasHM (TCanvas* theCanvas) {
     f_show_periph->SetLineStyle(2);
     f_show_periph->Draw("same");
 
-    plotMarkerLineText(0.60, 0.85, 1.2,1, 20, 1,1,"HM Data", 0.05, true);
-    plotMarkerLineText(0.60, 0.78, 0, 2, 1, 2, 1,"Fit", 0.05);
-    plotMarkerLineText(0.60, 0.71, 0, kSpring+4, 0, kSpring+4, 2,"#it{G} + #it{F}#it{Y}^{LM}", 0.05);
+    plotMarkerLineText(0.55, 0.85, 1.2,1, 20, 1,1,"HM Data", 0.05, true);
+    plotMarkerLineText(0.55, 0.78, 0, 2, 1, 2, 1,"Fit", 0.05);
+    plotMarkerLineText(0.55, 0.71, 0, kSpring+4, 0, kSpring+4, 2,"#it{G} + #it{F}#it{Y}^{LM}", 0.05);
 
-    plotMarkerLineText(              0.30,0.13, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}",0.05);
-    if (!m_fixC3) plotMarkerLineText(0.30,0.6, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}", 0.05);
+    plotMarkerLineText(              0.30,0.15, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}",0.05);
+    if (!m_fixC3) plotMarkerLineText(0.30,0.08, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge} + #it{F}#it{Y}^{LM}", 0.05);
 
     float _chi2 = 0;
     for (int i=1; i<h_pull->GetXaxis()->GetNbins()+1; i++){
