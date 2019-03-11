@@ -38,7 +38,7 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     for (int i=Npar_LM; i<Npar_LM+getNHar(); i++) { 
         vec_value_raw.push_back(_init_HM.getCoeffRawValue(i-m_nparLmAtlas+1));
         vec_error_raw.push_back(_init_HM.getCoeffRawError(i-m_nparLmAtlas+1));
-        parInitValues.at(i) = _init_HM.getCoeffRawValue(i-m_nparLmAtlas+1);
+        parInitValues.at(i) = _init_HM.getCoeffRawValue(i-m_nparLmAtlas+1)/2.;
     }
     theResult.setCoeffRaw(vec_value_raw, vec_error_raw);
     double _value_G_HM = _init_HM.getPedstalValue();
@@ -153,25 +153,14 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     // -------------------------------------------------------------
     // Prepare histograms and function for plotting 
     // uncorrected cn parameters are used for visulization
-    //if (m_applyZYAM) {
-    //    string _f_periph_forPlot = "[0] * ( 1 + 2*(";
-    //    for (int ihar=0; ihar<getNHar(); ihar++){
-    //        _f_periph_forPlot += Form("[%d]*(cos(%d*x)-1)", ihar+1, ihar+1);
-    //        if (ihar != getNHar()-1) _formula += (" + ");
-    //    }
-    //    _f_periph_forPlot += (") )*[%d] + [%d]", getNHar()+1, getNHar()+2);
-    //    f_show_periph = new TF1("f_show_periph", _f_periph_forPlot.c_str(), m_dphiRangeLow, m_dphiRangeHigh);
-    //} else {
-    if (1) {
-        string _f_periph_forPlot = "[0] * ( 1 + 2*(";
-        for (int ihar=0; ihar<getNHar(); ihar++){
-            _f_periph_forPlot += Form("[%d]*cos(%d*x)", ihar+1, ihar+1);
-            if (ihar != getNHar()-1) _f_periph_forPlot += (" + ");
-        }
-        _f_periph_forPlot += Form(") )*[%d] + [%d]", getNHar()+1, getNHar()+2);
-        if (m_debug) cout << "Scaled peripheral function: " << _f_periph_forPlot.c_str() << endl;
-        f_show_periph = new TF1("f_show_periph", _f_periph_forPlot.c_str(), m_dphiRangeLow, m_dphiRangeHigh);
+    string _f_periph_forPlot = "[0] * ( 1 + 2*(";
+    for (int ihar=0; ihar<getNHar(); ihar++){
+        _f_periph_forPlot += Form("[%d]*cos(%d*x)", ihar+1, ihar+1);
+        if (ihar != getNHar()-1) _f_periph_forPlot += (" + ");
     }
+    _f_periph_forPlot += Form(") )*[%d] + [%d]", getNHar()+1, getNHar()+2);
+    if (m_debug) cout << "Scaled peripheral function: " << _f_periph_forPlot.c_str() << endl;
+    f_show_periph = new TF1("f_show_periph", _f_periph_forPlot.c_str(), m_dphiRangeLow, m_dphiRangeHigh);
 
     for (int ipar = 0; ipar < getNHar()+1; ipar++) {
         f_show_periph->SetParameter(ipar, result.Value(ipar));
@@ -195,8 +184,6 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     m_hist_LM = (TH1F*)hist_LM->Clone("__hist_LM");
 
     cout << endl;
-    //delete f_LM; f_LM = 0;
-    //delete f_HM; f_HM = 0;
     return theResult;
 }
 
@@ -451,17 +438,19 @@ subResult NonFlowSubtractor::periphSub  (TH1* h_sr_lm,  TH1* h_lr_lm,
     subLM2.init();
     subResult result_lm2 = subLM2.periphSub(h_sr_lm, h_lr_lm, h_sr_lm2, h_lr_lm2);
 
+    // since rho is calculated from short range correlation, correlation between rho and flow coefficient is ignored (to be improved)
     vector<float> vec_subImp_value;
     vector<float> vec_subImp_error;
     for (int ihar=0; ihar<getNHar(); ihar++){
         float _rho      = result_hm .getRhoValue();
+        float _rho_error= result_hm .getRhoError();
         float _coeff_hm = result_hm .getCoeffSubValue(ihar+1);
         float _error_hm = result_hm .getCoeffSubError(ihar+1);
         float _coeff_lm = result_lm2.getCoeffSubValue(ihar+1);
         float _error_lm = result_lm2.getCoeffSubError(ihar+1);
 
         float _coeff_corrected = _coeff_hm + _rho*(_coeff_lm);
-        float _error = sqrt(pow(_error_hm,2) + pow(_rho*_error_lm,2)); // ignore error on rho, to be improved
+        float _error = sqrt(pow(_error_hm, 2) + pow(_rho*_error_lm, 2) + pow(_coeff_lm*_rho_error, 2)); 
         vec_subImp_value.push_back(_coeff_corrected);
         vec_subImp_error.push_back(_error);
     }
@@ -469,8 +458,72 @@ subResult NonFlowSubtractor::periphSub  (TH1* h_sr_lm,  TH1* h_lr_lm,
     //update result_hm with imporoved fit results
     result_hm.setCoeffSubImp(vec_subImp_value, vec_subImp_error);
 
+    if (m_debug) {
+        cout << " ===================================================" << endl;
+        cout << std::setprecision(5) << " Improved peripheral sbutraction results: " << endl;
+        cout << "  -unsubtracted:\t v22 value = " << result_hm.getV22RawValue() 
+             << ",\terror = " << result_hm.getV22RawError() 
+             << ",\trel_error = " << result_hm.getV22RawError()/result_hm.getV22RawValue() << endl;
+
+        cout << "  -default method:\t v22 value = " << result_hm.getV22SubValue() 
+             << ",\terror = " << result_hm.getV22SubError() 
+             << ",\trel_error = " << result_hm.getV22SubError()/result_hm.getV22SubValue() << endl;
+
+        cout << "  -improved method:\t v22 value = " << result_hm.getV22SubImpValue() 
+             << ",\terror = " << result_hm.getV22SubImpError() 
+             << ",\trel_error = " << result_hm.getV22SubImpError()/result_hm.getV22SubImpValue() << endl << endl;
+    }
+
     return result_hm;
 }
+
+
+
+
+subResult NonFlowSubtractor::periphSub  (TH1* h_sr_lm,  TH1* h_lr_lm, 
+                                         TH1* h_sr_hm,  TH1* h_lr_hm, 
+                                         float cn_LM,  float cn_LM_error) {
+
+    subResult result_hm  = periphSub(h_sr_lm, h_lr_lm, h_sr_hm,  h_lr_hm);
+
+    vector<float> vec_subImp_value;
+    vector<float> vec_subImp_error;
+    for (int ihar=0; ihar<getNHar(); ihar++){
+        float _rho      = result_hm .getRhoValue();
+        float _rho_error= result_hm .getRhoError();
+        float _coeff_hm = result_hm .getCoeffSubValue(ihar+1);
+        float _error_hm = result_hm .getCoeffSubError(ihar+1);
+        float _coeff_lm = cn_LM;
+        float _error_lm = cn_LM_error;
+
+        float _coeff_corrected = _coeff_hm + _rho*(_coeff_lm);
+        float _error = sqrt(pow(_error_hm, 2) + pow(_rho*_error_lm, 2) + pow(_coeff_lm*_rho_error, 2)); 
+        vec_subImp_value.push_back(_coeff_corrected);
+        vec_subImp_error.push_back(_error);
+    }
+
+    //update result_hm with imporoved fit results
+    result_hm.setCoeffSubImp(vec_subImp_value, vec_subImp_error);
+
+    if (m_debug) {
+        cout << " ===================================================" << endl;
+        cout << std::setprecision(5) << " Improved peripheral sbutraction results: " << endl;
+        cout << "  -unsubtracted:\t v22 value = " << result_hm.getV22RawValue() 
+             << ",\terror = " << result_hm.getV22RawError() 
+             << ",\trel_error = " << result_hm.getV22RawError()/result_hm.getV22RawValue() << endl;
+
+        cout << "  -default method:\t v22 value = " << result_hm.getV22SubValue() 
+             << ",\terror = " << result_hm.getV22SubError() 
+             << ",\trel_error = " << result_hm.getV22SubError()/result_hm.getV22SubValue() << endl;
+
+        cout << "  -improved method:\t v22 value = " << result_hm.getV22SubImpValue() 
+             << ",\terror = " << result_hm.getV22SubImpError() 
+             << ",\trel_error = " << result_hm.getV22SubImpError()/result_hm.getV22SubImpValue() << endl << endl;
+    }
+
+    return result_hm;
+}
+
 
 
 
@@ -480,11 +533,6 @@ bool NonFlowSubtractor :: plotAtlasHM (TPad* thePad) {
     if (!thePad) return false;
     thePad->cd();
 
-    int MaxBin = m_hist_HM->GetMaximumBin();
-    int MinBin = m_hist_HM->GetMinimumBin();
-    double Max = 10;
-    double Min = 0.;
-    //m_hist_HM->GetYaxis()->SetRangeUser(Min, Max);
     m_hist_HM->SetMarkerSize(0.8);
     m_hist_HM->SetXTitle("#Delta#it{#phi}");
     m_hist_HM->SetYTitle("#it{Y} (#Delta#it{#phi})");
@@ -496,23 +544,20 @@ bool NonFlowSubtractor :: plotAtlasHM (TPad* thePad) {
     f_show_flow2->SetLineStyle(2);
     f_show_flow2->SetLineWidth(1);
     f_show_flow2->Draw("same");
-    if (!m_fixC3) {
-        f_show_flow3->SetLineWidth(2);
-        f_show_flow3->SetLineColor(kOrange+1);
-        f_show_flow3->SetLineStyle(3);
-        f_show_flow3->Draw("same");
-    }
     f_show_periph->SetLineWidth(2);
     f_show_periph->SetLineColor(kSpring+4);
     f_show_periph->SetLineStyle(2);
     f_show_periph->Draw("same");
-    plotMarkerText(    0.60,0.88, 1, 20, "Data", 0.7);
-    plotMarkerLineText(0.60,0.83, 0, 2, 1, 2, 1,"Fit");
-    plotMarkerLineText(0.60,0.78, 0, kSpring+4, 0, kSpring+4, 2,"#it{g} + #it{f}#it{Y}^{ periph}");
-    plotMarkerLineText(              0.78,0.83, 0, 4, 0, 4, 2,"#it{c}_{2}");
-    if (!m_fixC3) plotMarkerLineText(0.78,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{c}_{3}");
 
     return true;
+}
+
+void NonFlowSubtractor :: plotAtlasHMLabel (TPad* thePad) {
+    thePad->cd();
+    plotMarkerLineText(0.25, 0.88, 1.2, 1, 20, 1,1,"HM Data", 0.08, true);
+    plotMarkerLineText(0.25, 0.78, 0,   2, 1, 2, 1,"Fit", 0.08);
+    plotMarkerLineText(0.25, 0.68, 0, kSpring+4, 0, kSpring+4, 2,"#it{G} + #it{F}#it{Y}^{LM}", 0.08);
+    plotMarkerLineText(0.25, 0.58, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}",0.08);
 }
 
 
@@ -565,7 +610,6 @@ bool NonFlowSubtractor :: plotAtlasHM (TCanvas* theCanvas) {
     plotMarkerLineText(0.55, 0.85, 1.2,1, 20, 1,1,"HM Data", 0.05, true);
     plotMarkerLineText(0.55, 0.78, 0, 2, 1, 2, 1,"Fit", 0.05);
     plotMarkerLineText(0.55, 0.71, 0, kSpring+4, 0, kSpring+4, 2,"#it{G} + #it{F}#it{Y}^{LM}", 0.05);
-
     plotMarkerLineText(              0.30,0.15, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}",0.05);
     if (!m_fixC3) plotMarkerLineText(0.30,0.08, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge} + #it{F}#it{Y}^{LM}", 0.05);
 

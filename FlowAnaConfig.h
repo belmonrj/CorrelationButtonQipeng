@@ -14,6 +14,9 @@ class FlowAnaConfig {
     // second loweset LM Nch range for improved fit results
     float m_multiRef2_low;
     float m_multiRef2_high;
+    
+    float m_corrEtaBoundary;
+    float m_corrEtaInterval;
 
     // gap cut for abs(DeltaEta)
     float m_etaRange_low;
@@ -35,17 +38,18 @@ class FlowAnaConfig {
     // variable pointer to constant TH1F objects
     const TH1F* m_input_multiBinning;
     const TH1F* m_input_ptBinning;
-    const TH1F* m_input_bkgSubBinning;
+    const TH1F* m_input_3rdBinning;
 
     string m_inputName_multiBinning;
     string m_inputName_ptBinning;
     // binning for dimension that used for background subtraction in hard-soft correlation
     // usually it's invariant mass, could be momemtum inbalance for mu-hadron correlation
-    string m_inputName_bkgSubBinning;
+    string m_inputName_3rdBinning; // name for input binning TH1F
+    string m_Name_3rdBinning; // naame for dimension
 
     const TH1F* m_output_multiBinning;
     const TH1F* m_output_ptBinning;
-    const TH1F* m_output_bkgSubBinning;
+    const TH1F* m_output_3rdBinning;
 
     string m_corrHistPathSame;
     string m_corrHistPathMix;
@@ -60,10 +64,14 @@ class FlowAnaConfig {
     bool init();
     void print() const; 
 
-
     // inline member functions
     TFile* inputFile() const { return m_inputFile; }
     TFile* outputFile() const { return m_outputFile; }
+
+    void  setCorrEtaBoundary(float _value) { m_corrEtaBoundary = _value; }
+    void  setCorrEtaInterval(float _value) { m_corrEtaInterval = _value; }
+    float getCorrEtaBoundary() const { return m_corrEtaBoundary; }
+    float getCorrEtaInterval() const { return m_corrEtaInterval; }
 
     void setReference(float _low, float _high) { m_multiRef_low = _low; m_multiRef_high = _high; }
     void setReference2(float _low, float _high) { m_multiRef2_low = _low; m_multiRef2_high = _high; }
@@ -88,17 +96,27 @@ class FlowAnaConfig {
     void setInputFileName  (string _name) { m_inputFileName = _name; }
     void setOutputFileName (string _name) { m_outputFileName = _name; }
     string getInputFileName  () const { return m_inputFileName; }
-    string getoutputFileName () const { return m_outputFileName; }
+    string getOutputFileName () const { return m_outputFileName; }
 
     void setInputMultiBinningName  (string _name) { m_inputName_multiBinning = _name; }
     void setInputPtBinningName     (string _name) { m_inputName_ptBinning = _name; }
+    void setInputThirdBinningName  (string _name) { m_inputName_3rdBinning = _name; }
+
+    void setThirdDimensionName  (string _name) { m_Name_3rdBinning = _name; }
+    string getThirdDimensionName  () const { return m_Name_3rdBinning; }
 
     void setOutputMultiBinning (const int _nbins, const float* _range ) { m_output_multiBinning = new TH1F("_output_multiBinning","",_nbins, _range); }
     void setOutputPtBinning    (const int _nbins, const float* _range ) { m_output_ptBinning    = new TH1F("_output_ptBinning","",_nbins, _range); }
+    void setOutputThirdBinning    (const int _nbins, const float* _range ) { m_output_3rdBinning = new TH1F("_output_3rdBinning","",_nbins, _range); }
+
+
     const TH1F* getOutputMultiBinning() const {return m_output_multiBinning;}
     const TH1F* getOutputPtBinning() const {return m_output_ptBinning;}
+    const TH1F* getOutputThirdBinning() const {return m_output_3rdBinning;}
+
     const TH1F* getInputMultiBinning() const {return m_input_multiBinning;}
     const TH1F* getInputPtBinning() const    {return m_input_ptBinning;}
+    const TH1F* getInputThirdBinning() const {return m_input_3rdBinning;}
 
     void setCorrHistPathSame (string _path) { m_corrHistPathSame = _path; }
     void setCorrHistPathMix  (string _path) { m_corrHistPathMix = _path;  }
@@ -118,9 +136,11 @@ FlowAnaConfig::FlowAnaConfig() {
     // like invariant mass for hard-soft correlation
     m_input_multiBinning = 0;
     m_input_ptBinning = 0;
+    m_input_3rdBinning = 0;
 
     m_output_multiBinning = 0;
     m_output_ptBinning = 0;
+    m_output_3rdBinning = 0;
 
     // default value of paths and names
     // meaningless for different analyzer 
@@ -128,7 +148,9 @@ FlowAnaConfig::FlowAnaConfig() {
     m_outputPath = "../ButtonRootFiles/";
     m_outputFigPath = "../ButtonPlots/";
     m_inputName_multiBinning = "hNch_binning";
-    m_inputName_ptBinning    =  "hpt_binning";
+    m_inputName_ptBinning    = "hpt_binning";
+    m_inputName_3rdBinning = "empty";
+
     m_corrHistPathSame = "Correlation_2D_raw/h2pc_sig_";
     m_corrHistPathMix  = "Correlation_2D_raw/h2pc_mix_";
     m_triggerYiledHistName = "h2_nsig_raw";
@@ -142,6 +164,9 @@ FlowAnaConfig::FlowAnaConfig() {
 
     m_etaRange_low = 2.0;
     m_etaRange_high = 5.0;
+
+    m_corrEtaBoundary = 5.0; // only for hh, 4.5 for HF-h correlation
+    m_corrEtaInterval = 0.1;
 
     m_multiRef_low = 10;
     m_multiRef_high = 20;
@@ -194,6 +219,21 @@ void FlowAnaConfig::checkBinningConsistency() const {
         } 
     }
 
+    if (m_input_3rdBinning && m_output_3rdBinning) { 
+        const double* _Output_range = m_output_3rdBinning->GetXaxis()->GetXbins()->GetArray();
+        const double* _Input_range  =  m_input_3rdBinning->GetXaxis()->GetXbins()->GetArray();
+        for (int obin = 0; obin < m_output_3rdBinning->GetXaxis()->GetNbins() + 1; obin++) {
+            bool _hasInconsistency = true;
+            for (int ibin = 0; ibin < m_input_3rdBinning->GetXaxis()->GetNbins() + 1; ibin++) {
+                if (_Output_range[obin] == _Input_range[ibin]) {
+                    _hasInconsistency = false;
+                    break;
+                }
+            }
+            if (_hasInconsistency) cout << "Find inconsistency between input and output 3rd binning" << endl;
+        }
+    } 
+
 
 }
 
@@ -208,6 +248,7 @@ bool FlowAnaConfig::init() {
     }
     m_input_multiBinning = (TH1F*) m_inputFile->Get(m_inputName_multiBinning.c_str());
     m_input_ptBinning = (TH1F*) m_inputFile->Get(m_inputName_ptBinning.c_str());
+    if (m_inputName_3rdBinning.compare("empty") != 0) m_input_3rdBinning = (TH1F*) m_inputFile->Get(m_inputName_3rdBinning.c_str());
 
     m_outputFile = new TFile(Form("%s/%s.root",m_outputPath.c_str(), m_outputFileName.c_str() ),"RECREATE");
     if (m_outputFile->IsZombie()) {
@@ -243,11 +284,25 @@ void FlowAnaConfig::print() const {
             PrintHistBinning (m_output_ptBinning);
         }
     }
+    
+    if (m_input_3rdBinning) {
+        cout << "----------------------------------------------------" << endl;
+        cout << "Input " << m_Name_3rdBinning.c_str() << " binning: " << endl;
+        PrintHistBinning (m_input_3rdBinning);
+        if (m_output_3rdBinning) {
+            cout << "Output " << m_Name_3rdBinning.c_str() << "  binning: " << endl;
+            PrintHistBinning (m_output_3rdBinning);
+        }
+    }
+
     checkBinningConsistency();
 
     cout << endl;
     cout << "----------------------------------------------------" << endl;
-    cout << "Running the 2pc correlation analysis with the flowing setup: " << endl;
+    cout << "Running the 2pc correlation analysis with the following setup: " << endl;
+
+    cout << "Deta correlation boundary = " << getCorrEtaBoundary() << endl;
+    cout << "Deta correlation Interval = " << getCorrEtaInterval() << endl;
 
     cout << "LM Reference binning: " << endl; 
     cout << "\tLM : " << getReferenceLow() << " <= Nch < " << getReferenceHigh() << endl;

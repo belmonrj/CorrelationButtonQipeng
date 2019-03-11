@@ -68,7 +68,7 @@ class NonFlowSubtractor {
     virtual ~NonFlowSubtractor() {};
 
     void init();
-    void setDebug (bool _debug) { m_debug = _debug; }
+    void setDebug (bool _debug = true) { m_debug = _debug; }
 
     // interface for using AnaConfig classess
     // may be useless for other users
@@ -78,6 +78,10 @@ class NonFlowSubtractor {
     //---------------------------------
     // Different subtraction method
     //---------------------------------
+    // input should be 1D DeltaPhi per-trigger pair yield
+    // One can use uncorrected templateFit to self-normalized correlation function C(DeltaPhi)
+    // !!NEVER!! used improved methods for self-normalized correlation function C(DeltaPhi)
+    
   public:
     //---------------------------------
     // Atlas template fit method, if hist_LM2 = 0, the 1 step correction (HION-2017-07) will be applied to cX_corr_value in subResult
@@ -108,9 +112,9 @@ class NonFlowSubtractor {
                           TH1* h_sr_lm2, TH1* h_lr_lm2);
 
     // corrected version with external cn_LM value and error
-    //subResult periphSub  (TH1* h_sr_lm,  TH1* h_lr_lm, 
-    //                      TH1* h_sr_hm,  TH1* h_lr_hm, 
-    //                      float cn_LM,  float cn_LM_error);
+    subResult periphSub  (TH1* h_sr_lm,  TH1* h_lr_lm, 
+                          TH1* h_sr_hm,  TH1* h_lr_hm, 
+                          float cn_LM,  float cn_LM_error);
 
 
     //---------------------------------
@@ -121,34 +125,34 @@ class NonFlowSubtractor {
     subResult fourierFit (TH1* hist, TH1* hist_LM = 0);
 
 
-    // Additional interface to configure the ATLAS Template fit
+
+    // Additional interface to configure the ATLAS Template fitting
     //---------------------------------
     // flag to control c1 term, set to true (fixed at zero) by default 
     // otherwise the fit procedure have problems with converging
     // detailed in p+Pb HF flow supporting note.
-    void setAtlasFixedC1 (bool _isFixed) {m_fixC1 = _isFixed;}
+    void setAtlasFixedC1 (bool _isFixed = true) {m_fixC1 = _isFixed;}
     // Same for c3, false by default
     // not necessary actually
-    void setAtlasFixedC3 (bool _isFixed) {m_fixC3 = _isFixed;}
+    void setAtlasFixedC3 (bool _isFixed = true) {m_fixC3 = _isFixed;}
 
-    // Allowing user to fit LM and HM histograms with ZYAM applied
-    // set to false (no ZYAM) by default
-    // if ZYAM mode is on, the ZYAM procedure will be applied to input histograms no matter ZYAM has been applied before or not, since it's not really a problem to apply ZYAM twice.
-    void setZYAM (bool _isApplied) {m_applyZYAM = _isApplied;}
-
+    // plot utilities for default ATLAS template fitting (no improved correction applied yet)
     bool plotAtlasHM(TPad* thePad); // small figure
+    void plotAtlasHMLabel(TPad* thePad); // small figure
     bool plotAtlasLM(TPad* thePad); // small figure
     bool plotAtlasHM(TCanvas* theCanvas); // big figure
     bool plotAtlasLM(TCanvas* theCanvas); // big figure
+
+
+    // no support for ZYAM in Atlas method to void confusing for improved fit correction
+    // becomes a support method for running CMS method using ATLAS PTY definition
+    void setZYAM (bool _isApplied = true) {m_applyZYAM = _isApplied;}
 
   private:
     // private members for ATLAS tempalte fit
     static double f_periph(double *x, double *par);
     static double f_ridge (double *x, double *par);
     static double templ   (double *x, double *par);
-    // after ZYAM applied
-    static double f_periph2(double *x, double *par);
-    static double templ2   (double *x, double *par);
 
     bool m_fixC1;
     bool m_fixC3;
@@ -162,10 +166,6 @@ class NonFlowSubtractor {
     TF1* f_show_periph;
     TF1* f_show_flow2; //c2
     TF1* f_show_flow3; //c3
-
-  public:
-    //---------------------------------
-
 
 };
 #endif
@@ -257,13 +257,6 @@ double NonFlowSubtractor::f_ridge(double *x, double *par) {
         value += 2.*(par[ihar]*TMath::Cos((ihar+1)*xx));
     }
     return value;
-    /*
-    return 1 + 2 * (par[0]*TMath::Cos(1*xx)     // c1
-    		      + par[1]*TMath::Cos(2*xx)     // c2
-    		      + par[2]*TMath::Cos(3*xx)     // c3
-		          + par[3]*TMath::Cos(4*xx)     // c4
-                  );  
-    */
 }
 
 
@@ -274,29 +267,3 @@ double NonFlowSubtractor::templ(double *x, double *par) {
     double f = par[2*getNHar()+1]*f_periph(x, par) + par[2*getNHar()+2]*f_ridge(x, &par[getNHar()+1]);
     return f;
 }
-
-
-
-/*
-// for ZYAM reference 
-// G^{LM}*( 2*Sigma_n(an* (cos(n*dphi)-1) ) ), n=1~4
-// 5 parameters in total
-double NonFlowSubtractor::f_periph2(double *x, double *par) {
-    double xx = x[0];
-    return (par[0])*( 2*(  // G^{LM}
-                  par[1]* (TMath::Cos(1*xx) - 1)  // a1^{LM}
-                + par[2]* (TMath::Cos(2*xx) - 1)  // a2^{LM}
-                + par[3]* (TMath::Cos(3*xx) - 1)  // a3^{LM}
-                + par[4]* (TMath::Cos(4*xx) - 1)  // a4^{LM}
-                ));
-}
-
-
-// F*f_periph2 + (G^{HM} - F*G^{LM})*f_ridge
-// 11 parameters in total
-double NonFlowSubtractor::templ2(double *x, double *par) {
-    double xx = x[0];
-    double f = par[9]*f_periph2(x, par) + par[10]*f_ridge(x, &par[5]);
-    return f;
-}
-*/
