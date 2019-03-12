@@ -71,6 +71,14 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
         fitter.Config().ParSettings(Npar_LM).SetValue(0);
         fitter.Config().ParSettings(Npar_LM).Fix();
     }
+    if (m_fixC3) {
+        fitter.Config().ParSettings(Npar_LM+2).SetValue(0);
+        fitter.Config().ParSettings(Npar_LM+2).Fix();
+    }
+    if (m_fixC4) {
+        fitter.Config().ParSettings(Npar_LM+3).SetValue(0);
+        fitter.Config().ParSettings(Npar_LM+3).Fix();
+    }
 
     for (int ipar = 0; ipar < Npar; ipar++) {
         fitter.Config().ParSettings(ipar).SetName(m_parName_HM.at(ipar).c_str());
@@ -584,7 +592,7 @@ bool NonFlowSubtractor :: plotAtlasHM (TCanvas* theCanvas) {
     float distance = m_hist_HM->GetBinContent(MaxBin) - m_hist_HM->GetBinContent(MinBin);
     distance /= 2.0;
     double Max = m_hist_HM->GetBinContent(MaxBin) + distance;
-    double Min = m_hist_HM->GetBinContent(MinBin) - distance;
+    double Min = m_hist_HM->GetBinContent(MinBin) - distance/3.;
     m_hist_HM->SetYTitle("#it{Y}(#Delta#it{#phi})");
     m_hist_HM->GetYaxis()->SetRangeUser(Min, Max);
     m_hist_HM->GetListOfFunctions()->Add(f_HM);
@@ -610,8 +618,8 @@ bool NonFlowSubtractor :: plotAtlasHM (TCanvas* theCanvas) {
     plotMarkerLineText(0.55, 0.85, 1.2,1, 20, 1,1,"HM Data", 0.05, true);
     plotMarkerLineText(0.55, 0.78, 0, 2, 1, 2, 1,"Fit", 0.05);
     plotMarkerLineText(0.55, 0.71, 0, kSpring+4, 0, kSpring+4, 2,"#it{G} + #it{F}#it{Y}^{LM}", 0.05);
-    plotMarkerLineText(              0.30,0.15, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}",0.05);
-    if (!m_fixC3) plotMarkerLineText(0.30,0.08, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge} + #it{F}#it{Y}^{LM}", 0.05);
+    plotMarkerLineText(              0.74,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}",0.05);
+    if (!m_fixC3) plotMarkerLineText(0.74,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge} + #it{F}#it{Y}^{LM}", 0.05);
 
     float _chi2 = 0;
     for (int i=1; i<h_pull->GetXaxis()->GetNbins()+1; i++){

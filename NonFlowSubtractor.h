@@ -135,6 +135,7 @@ class NonFlowSubtractor {
     // Same for c3, false by default
     // not necessary actually
     void setAtlasFixedC3 (bool _isFixed = true) {m_fixC3 = _isFixed;}
+    void setAtlasFixedC4 (bool _isFixed = true) {m_fixC4 = _isFixed;}
 
     // plot utilities for default ATLAS template fitting (no improved correction applied yet)
     bool plotAtlasHM(TPad* thePad); // small figure
@@ -156,6 +157,7 @@ class NonFlowSubtractor {
 
     bool m_fixC1;
     bool m_fixC3;
+    bool m_fixC4;
     bool m_applyZYAM;
 
     TH1F* m_hist_LM;
@@ -176,6 +178,7 @@ NonFlowSubtractor :: NonFlowSubtractor() {
     m_debug = false;
     m_fixC1 = true;
     m_fixC3 = false;
+    m_fixC4 = false;
 
     m_dphiRangeLow = -0.5*TMath::Pi();
     m_dphiRangeHigh = 1.5*TMath::Pi();

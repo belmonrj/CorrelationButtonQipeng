@@ -23,6 +23,9 @@ class CorrelationMaker {
     float m_jetEtaIndexLow;
     float m_jetEtaIndexHigh;
 
+    float m_exclude_low;
+    float m_exclude_high;
+    bool  m_setExclude;
     // in case one wants to check the 1D signal and 1D mix
     TH1* m_h1_sig;
     TH1* m_h1_mix;
@@ -37,6 +40,10 @@ class CorrelationMaker {
     void setRebin (int _n) { m_rebin = _n; }
     void setDebug (bool _debug = true) { m_debug = _debug; }
     void setConfig (const FlowAnaConfig* _config) { m_anaConfig = _config; }
+
+    // interface for J/psi analysis to exclude signal region
+    void setExclude(float _low, float _high) {m_exclude_low = _low; m_exclude_high = _high; m_setExclude = true;};
+
     const FlowAnaConfig* getConfig () const { return m_anaConfig; }
 
     void get1DSigHist() const {return m_h1_sig;}
@@ -79,6 +86,10 @@ CorrelationMaker::CorrelationMaker() {
 
     m_h1_sig = 0;
     m_h1_mix = 0;
+
+    m_exclude_low = 0;
+    m_exclude_high = 0;;
+    m_setExclude = false;
 }
 
 
@@ -347,16 +358,28 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
         if (m_anaConfig->getInputThirdBinning()->GetXaxis()->GetBinLowEdge(iadd) == _add_low)  index_add_low  = iadd - 1; 
         if (m_anaConfig->getInputThirdBinning()->GetXaxis()->GetBinUpEdge(iadd)  == _add_high) index_add_high = iadd - 1; 
     }
+
+    int _exclude_index_add_low = 0;
+    int _exclude_index_add_high = 0;
+    if (m_setExclude) {
+        for (int iadd=1; iadd<m_anaConfig->getInputThirdBinning()->GetXaxis()->GetNbins() + 1; iadd++){
+            if (m_anaConfig->getInputThirdBinning()->GetXaxis()->GetBinLowEdge(iadd) == m_exclude_low)  _exclude_index_add_low  = iadd - 1; 
+            if (m_anaConfig->getInputThirdBinning()->GetXaxis()->GetBinUpEdge(iadd)  == m_exclude_high) _exclude_index_add_high = iadd - 1; 
+        }
+    }
+
     if (m_debug) {
         cout << "index_Nch_low = " << index_Nch_low << ",\tindex_Nch_high = " << index_Nch_high << endl;
         cout << "index_pt_low = "  << index_pt_low  << ",\tindex_pt_high = "  << index_pt_high  << endl;
         cout << "index_3rd_low = " << index_add_low << ",\tindex_3rd_high = " << index_add_high << endl;
+        cout << "exclude index = " << _exclude_index_add_low << ",\t" << _exclude_index_add_high << endl;
     }
 
 
     for (int iNch=index_Nch_low; iNch<index_Nch_high+1; iNch++) {
         for (int ipt=index_pt_low; ipt<index_pt_high+1; ipt++) {
             for (int iadd=index_add_low; iadd<index_add_high+1; iadd++) {
+                if (m_setExclude && iadd >= _exclude_index_add_low && iadd <= _exclude_index_add_high) continue;
 
 	            TH2* htemp_1 = (TH2*)gDirectory->Get(Form("%sNch%d_pt%d_%s%d",path_sig.c_str(),iNch,ipt, m_anaConfig->getThirdDimensionName().c_str(), iadd));
 	            TH2* htemp_2 = (TH2*)gDirectory->Get(Form("%sNch%d_pt%d_%s%d",path_mix.c_str(),iNch,ipt, m_anaConfig->getThirdDimensionName().c_str(), iadd));

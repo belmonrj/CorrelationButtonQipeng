@@ -12,6 +12,8 @@ void testSimple() {
 
     NonFlowSubtractor subTool;
     // change the fitter configure before call init() here
+    subTool.setAtlasFixedC3();
+    subTool.setAtlasFixedC4();
     subTool.init();
 
     //--------------------------------------------------
@@ -37,7 +39,7 @@ void testSimple() {
     cout << "v22 = " << theResult.getV22SubValue() << " +/- " << theResult.getV22SubError() << endl;
     cout << "Improved v22 = " << theResult.getV22SubImpValue() << " +/- " << theResult.getV22SubImpError() << endl;
 
-    TCanvas* c1 = new TCanvas("c1","scaling",50,50, 600,600);
+    TCanvas* c1 = new TCanvas("c1","scaling",50,50, 600,700);
     subTool.plotAtlasHM(c1);
     c1->cd();
     // add addtional lengends
