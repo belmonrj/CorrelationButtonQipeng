@@ -155,6 +155,7 @@ class NonFlowSubtractor {
     // plot utilities for default ATLAS template fitting (no improved correction applied yet)
     // major plotting style with HM template fit and ridge fit
     bool plotAtlasSubHM(TCanvas* theCanvas); // big figure
+    bool plotAtlasHistSubHM(TCanvas* theCanvas); // big figure
 
     bool plotAtlasHM(TPad* thePad); // small figure
     void plotAtlasHMLabel(TPad* thePad); // small figure
@@ -235,6 +236,9 @@ NonFlowSubtractor :: NonFlowSubtractor() {
 
 void NonFlowSubtractor :: init() {
     if (m_debug) cout << "Running Non-flow subtraction up to order " << getNHar() << endl;
+
+    if (getNHar() < 3) m_fixC3 = true;
+    if (getNHar() < 4) m_fixC4 = true;
 
     _formula = "[0] * ( 1 + 2*(";
     for (int ihar=0; ihar<getNHar(); ihar++){

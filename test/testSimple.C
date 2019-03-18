@@ -20,9 +20,9 @@ void testSimple() {
     //--------------------------------------------------
     // ATLAS template fit
     //--------------------------------------------------
-    //subResult theResult = subTool.templateFit(h_correlation_LM, h_correlation_HM, h_correlation_LM2);
+    subResult theResult = subTool.templateFit(h_correlation_LM, h_correlation_HM, h_correlation_LM2);
     //subResult theResult = subTool.templateFit(h_correlation_LM, h_correlation_HM);
-    subResult theResult = subTool.templateHistFit(h_correlation_LM, h_correlation_HM);
+    //subResult theResult = subTool.templateHistFit(h_correlation_LM, h_correlation_HM);
 
     //--------------------------------------------------
     // Test for using symmetrized dphi correlation
@@ -41,9 +41,10 @@ void testSimple() {
     cout << "v22 = " << theResult.getV22SubValue() << " +/- " << theResult.getV22SubError() << endl;
     cout << "Improved v22 = " << theResult.getV22SubImpValue() << " +/- " << theResult.getV22SubImpError() << endl;
 
-    //TCanvas* c1 = new TCanvas("c1","scaling",50,50, 600,700);
-    TCanvas* c1 = new TCanvas("c1","scaling",50,50, 600,600);
-    subTool.plotAtlasHistHM(c1);
+    TCanvas* c1 = new TCanvas("c1","scaling",50,50, 600,700);
+    //TCanvas* c1 = new TCanvas("c1","scaling",50,50, 600,600);
+    //subTool.plotAtlasHistHM(c1);
+    subTool.plotAtlasSubHM(c1);
     c1->cd();
     // add addtional lengends
     
