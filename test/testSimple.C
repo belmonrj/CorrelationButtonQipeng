@@ -12,15 +12,17 @@ void testSimple() {
 
     NonFlowSubtractor subTool;
     // change the fitter configure before call init() here
-    subTool.setAtlasFixedC3();
-    subTool.setAtlasFixedC4();
+    //subTool.setAtlasFixedC3();
+    //subTool.setAtlasFixedC4();
+    subTool.setDebug();
     subTool.init();
 
     //--------------------------------------------------
     // ATLAS template fit
     //--------------------------------------------------
-    subResult theResult = subTool.templateFit(h_correlation_LM, h_correlation_HM, h_correlation_LM2);
+    //subResult theResult = subTool.templateFit(h_correlation_LM, h_correlation_HM, h_correlation_LM2);
     //subResult theResult = subTool.templateFit(h_correlation_LM, h_correlation_HM);
+    subResult theResult = subTool.templateHistFit(h_correlation_LM, h_correlation_HM);
 
     //--------------------------------------------------
     // Test for using symmetrized dphi correlation
@@ -39,14 +41,15 @@ void testSimple() {
     cout << "v22 = " << theResult.getV22SubValue() << " +/- " << theResult.getV22SubError() << endl;
     cout << "Improved v22 = " << theResult.getV22SubImpValue() << " +/- " << theResult.getV22SubImpError() << endl;
 
-    TCanvas* c1 = new TCanvas("c1","scaling",50,50, 600,700);
-    subTool.plotAtlasHM(c1);
+    //TCanvas* c1 = new TCanvas("c1","scaling",50,50, 600,700);
+    TCanvas* c1 = new TCanvas("c1","scaling",50,50, 600,600);
+    subTool.plotAtlasHistHM(c1);
     c1->cd();
     // add addtional lengends
     
-    TCanvas* c2 = new TCanvas("c2","scaling",50,50, 600,600);
-    subTool.plotAtlasLM(c2);
-    c2->cd();
+    //TCanvas* c2 = new TCanvas("c2","scaling",50,50, 600,600);
+    //subTool.plotAtlasLM(c2);
+    //c2->cd();
     // add addtional lengends
 
 }

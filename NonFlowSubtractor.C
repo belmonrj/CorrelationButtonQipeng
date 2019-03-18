@@ -1,11 +1,63 @@
 #include "NonFlowSubtractor.h"
 
 
+subResult NonFlowSubtractor :: templateHistFit(TH1* hist_LM, TH1* hist_HM) {
+    m_hist_LMtemp = (TH1F*)hist_LM->Clone("hist_LMtemp");
+
+    f_HM = new TF1("f_HM", templ_hist, m_dphiRangeLow, m_dphiRangeHigh, getNHar()+2);
+
+    for (int ipar=0; ipar<getNHar(); ipar++) {
+        f_HM->SetParName(ipar,Form("c%d",ipar));
+    }
+    f_HM->SetParName(getNHar(),"F");
+    f_HM->SetParName(getNHar()+1,"G");
+
+    f_HM->FixParameter(0,0);
+
+    hist_HM->Fit("f_HM", "0");
+    m_hist_HM = (TH1F*)hist_HM->Clone("__hist_HM");
+
+    subResult theResult;
+    vector<float> vec_value_sub;
+    vector<float> vec_error_sub;
+
+    for (int i=0; i<getNHar(); i++) {
+        vec_value_sub.push_back(f_HM->GetParameter(i));
+        vec_error_sub.push_back(f_HM->GetParError(i));
+    }
+    theResult.setCoeffSub(vec_value_sub, vec_error_sub);
+
+    // construct stuffs for plotting
+    f_show_periph = new TF1("f_show_periph", f_periph_hist, m_dphiRangeLow, m_dphiRangeHigh, 2);
+    f_show_periph->SetParameter(0, f_HM->GetParameter(getNHar()));
+    f_show_periph->SetParameter(1, f_HM->GetParameter(getNHar()+1));
+
+    f_show_flow2 = new TF1("f_show_flow2","[0] + 2*[1]*[2]*cos(2*x)", m_dphiRangeLow, m_dphiRangeHigh);
+    f_show_flow2->SetParameter(0, f_show_periph->Eval(0));
+    f_show_flow2->SetParameter(1, f_HM->GetParameter(getNHar()+1) );
+    f_show_flow2->SetParameter(2, f_HM->GetParameter(1)); // c2
+
+    h_show_periph = (TH1F*)hist_LM->Clone("h_show_periph");
+    h_show_HM = (TH1F*)hist_LM->Clone("h_show_HM");
+    h_show_periph->Reset();
+    h_show_HM->Reset();
+
+    for (int ibin = 1; ibin < h_show_periph->GetNbinsX()+1; ibin++) {
+        float _xx = h_show_periph->GetXaxis()->GetBinCenter(ibin);
+        h_show_periph->SetBinContent(ibin, f_show_periph->Eval(_xx));
+        h_show_HM->SetBinContent(ibin, f_HM->Eval(_xx));
+    }
+
+    return theResult;
+}
+
+
+
 subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     // procedure largely based on https://root.cern/doc/master/combinedFit_8C_source.html
 
-    const int Npar(2*getNHar()+3);
-    const int Npar_LM(getNHar()+1);
+    const int Npar(getNHarLM() + getNHar() + 3);
+    const int Npar_LM(getNHarLM() + 1);
 
     subResult theResult;
 
@@ -24,21 +76,23 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     }
 
     //perform fourier fit first to get initial values
-    subResult _init_LM = fourierFit(hist_LM);
+    subResult _init_LM = fourierFitLM(hist_LM);
     double _value_G_LM = _init_LM.getPedstalValue();
     double _error_G_LM = _init_LM.getPedstalError();
     parInitValues.at(0) = _init_LM.getPedstalValue();
-    for (int i=1; i<m_nparLmAtlas; i++) {
+    for (int i=1; i<getNHarLM()+1; i++) {
         parInitValues.at(i) = _init_LM.getCoeffRawValue(i);
     }
 
-    subResult _init_HM = fourierFit(hist_HM);
+    // fit HM using LM paramerization
+    // be carefull to the index
+    subResult _init_HM = fourierFitLM(hist_HM);
     vector<float> vec_value_raw;
     vector<float> vec_error_raw;
-    for (int i=Npar_LM; i<Npar_LM+getNHar(); i++) { 
-        vec_value_raw.push_back(_init_HM.getCoeffRawValue(i-m_nparLmAtlas+1));
-        vec_error_raw.push_back(_init_HM.getCoeffRawError(i-m_nparLmAtlas+1));
-        parInitValues.at(i) = _init_HM.getCoeffRawValue(i-m_nparLmAtlas+1)/2.;
+    for (int i=getNHarLM()+1; i<getNHarLM()+getNHar()+1; i++) { 
+        vec_value_raw.push_back(_init_HM.getCoeffRawValue(i-getNHarLM()));
+        vec_error_raw.push_back(_init_HM.getCoeffRawError(i-getNHarLM()));
+        parInitValues.at(i) = _init_HM.getCoeffRawValue(i-getNHarLM())/2.;
     }
     theResult.setCoeffRaw(vec_value_raw, vec_error_raw);
     double _value_G_HM = _init_HM.getPedstalValue();
@@ -60,7 +114,7 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     ROOT::Fit::Chi2Function chi2_HM(data_HM, wf_HM);
     // combine the two pdf for LM and HM
     // common parameters are decleared
-    GlobalChi2 globalChi2(chi2_LM, chi2_HM, getNHar());
+    GlobalChi2 globalChi2(chi2_LM, chi2_HM, getNHarLM(), getNHar());
 
     ROOT::Fit::Fitter fitter;
     fitter.Config().SetParamsSettings(Npar, &parInitValues.at(0));
@@ -71,13 +125,21 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
         fitter.Config().ParSettings(Npar_LM).SetValue(0);
         fitter.Config().ParSettings(Npar_LM).Fix();
     }
-    if (m_fixC3) {
+    if (m_fixC3 && getNHar() > 2) {
         fitter.Config().ParSettings(Npar_LM+2).SetValue(0);
         fitter.Config().ParSettings(Npar_LM+2).Fix();
     }
-    if (m_fixC4) {
+    if (m_fixC4 && getNHar() > 3) {
         fitter.Config().ParSettings(Npar_LM+3).SetValue(0);
         fitter.Config().ParSettings(Npar_LM+3).Fix();
+    }
+
+    // fix LM referece
+    // uncertainty should be propageted via systematics (bootstrap method)
+    if (m_fixLM) {
+        for (int ipar = 1; ipar < getNHarLM()+1; ipar++) {
+            fitter.Config().ParSettings(ipar).Fix();
+        }
     }
 
     for (int ipar = 0; ipar < Npar; ipar++) {
@@ -162,36 +224,76 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     // Prepare histograms and function for plotting 
     // uncorrected cn parameters are used for visulization
     string _f_periph_forPlot = "[0] * ( 1 + 2*(";
-    for (int ihar=0; ihar<getNHar(); ihar++){
+    for (int ihar=0; ihar<getNHarLM(); ihar++){
         _f_periph_forPlot += Form("[%d]*cos(%d*x)", ihar+1, ihar+1);
-        if (ihar != getNHar()-1) _f_periph_forPlot += (" + ");
+        if (ihar != getNHarLM()-1) _f_periph_forPlot += (" + ");
     }
-    _f_periph_forPlot += Form(") )*[%d] + [%d]", getNHar()+1, getNHar()+2);
+    _f_periph_forPlot += Form(") )*[%d] + [%d]", getNHarLM()+1, getNHarLM()+2);
     if (m_debug) cout << "Scaled peripheral function: " << _f_periph_forPlot.c_str() << endl;
     f_show_periph = new TF1("f_show_periph", _f_periph_forPlot.c_str(), m_dphiRangeLow, m_dphiRangeHigh);
 
-    for (int ipar = 0; ipar < getNHar()+1; ipar++) {
+    for (int ipar = 0; ipar < getNHarLM()+1; ipar++) {
         f_show_periph->SetParameter(ipar, result.Value(ipar));
     }
 
-    f_show_periph->SetParameter(getNHar()+1, result.Value(Npar - 2));
-    f_show_periph->SetParameter(getNHar()+2, result.Value(Npar - 1));
+    f_show_periph->SetParameter(getNHarLM()+1, result.Value(Npar - 2));
+    f_show_periph->SetParameter(getNHarLM()+2, result.Value(Npar - 1));
 
     f_show_flow2 = new TF1("f_show_flow2","[0] + [1]*(1+2*[2]*cos(2*x))", m_dphiRangeLow, m_dphiRangeHigh);
     f_show_flow2->SetParameter(0, f_LM->Eval(0)*result.Value(Npar - 2));
     f_show_flow2->SetParameter(1, result.Value(Npar - 1));
-    f_show_flow2->SetParameter(2, result.Value(getNHar()+2)); // c2
+    f_show_flow2->SetParameter(2, result.Value(getNHarLM()+2)); // c2
 
-
-    f_show_flow3 = new TF1("f_show_flow3","[0] + [1]*(1+2*[2]*cos(3*x) )", m_dphiRangeLow, m_dphiRangeHigh);
-    f_show_flow3->SetParameter(0, f_LM->Eval(0)*result.Value(Npar - 2));
-    f_show_flow3->SetParameter(1, result.Value(Npar - 1));
-    f_show_flow3->SetParameter(2, result.Value(getNHar()+3)); // c3
+    if (!m_fixC3) {  
+        f_show_flow3 = new TF1("f_show_flow3","[0] + [1]*(1+2*[2]*cos(3*x) )", m_dphiRangeLow, m_dphiRangeHigh);
+        f_show_flow3->SetParameter(0, f_LM->Eval(0)*result.Value(Npar - 2));
+        f_show_flow3->SetParameter(1, result.Value(Npar - 1));
+        f_show_flow3->SetParameter(2, result.Value(getNHarLM()+3)); // c3
+    }
 
     m_hist_HM = (TH1F*)hist_HM->Clone("__hist_HM");
     m_hist_LM = (TH1F*)hist_LM->Clone("__hist_LM");
 
-    cout << endl;
+    m_h_ridge = (TH1F*) m_hist_HM->Clone("h_ridge");
+    m_h_ridge->Reset();
+    for (int i=1; i<m_hist_HM->GetXaxis()->GetNbins()+1; i++){
+        float _residual = m_hist_HM->GetBinContent(i) - f_show_periph->Eval(m_hist_HM->GetBinCenter(i));
+        _residual *= m_ridge_scaleFactor;
+        //float _residual_error = _residual * ( m_hist_HM->GetBinError(i) / m_hist_HM->GetBinContent(i) );
+        float _residual_error = m_hist_HM->GetBinError(i)*m_ridge_scaleFactor;
+        m_h_ridge->SetBinContent(i,_residual);
+        m_h_ridge->SetBinError  (i,_residual_error);
+    }
+
+    f_show_ridge2 = new TF1("f_show_ridge2","[0]*2*[1]*cos(2*x)", m_dphiRangeLow, m_dphiRangeHigh);
+    f_show_ridge2->SetParameter(0, result.Value(Npar - 1)*m_ridge_scaleFactor);
+    f_show_ridge2->SetParameter(1, result.Value(getNHarLM()+2)); // c2
+
+    if (!m_fixC3) {  
+        f_show_ridge3 = new TF1("f_show_ridge3","[0]*2*[1]*cos(3*x)", m_dphiRangeLow, m_dphiRangeHigh);
+        f_show_ridge3->SetParameter(0, result.Value(Npar - 1)*m_ridge_scaleFactor);
+        f_show_ridge3->SetParameter(1, result.Value(getNHarLM()+3)); // c3
+    }
+
+    std::string _formula_ridge;
+    _formula_ridge = "[0]*2*([1]*cos(2*x)";
+    if (!m_fixC3) {
+        _formula_ridge += (" + [2]*cos(3*x)");
+    }
+    if (!m_fixC4) {
+        _formula_ridge += (" + [3]*cos(4*x)");
+    }
+    _formula_ridge += (")");
+    f_show_ridge = new TF1("f_show_ridge","[0]*2*([1]*cos(2*x) + [2]*cos(3*x) + [3]*cos(4*x))", m_dphiRangeLow, m_dphiRangeHigh);
+    f_show_ridge->SetParameter(0, result.Value(Npar - 1)*m_ridge_scaleFactor);
+    f_show_ridge->SetParameter(1, result.Value(getNHarLM()+2)); // c3
+    if (!m_fixC3) {
+        f_show_ridge->SetParameter(2, result.Value(getNHarLM()+3)); // c3
+    }
+    if (!m_fixC4) {
+        f_show_ridge->SetParameter(3, result.Value(getNHarLM()+4)); // c3
+    }
+
     return theResult;
 }
 
@@ -204,7 +306,8 @@ subResult NonFlowSubtractor::templateFit (TH1* hist_LM,  TH1* hist_HM, TH1* hist
     // for keeping the plot stuff to be the same as running unimproved fit
     // correction fit is done in different object 
     NonFlowSubtractor subLM2;
-    subLM2.setNHar(NonFlowSubtractor::m_nhar);
+    subLM2.setNHar(NonFlowSubtractor::m_nhar_HM);
+    subLM2.setNHarLM(NonFlowSubtractor::m_nhar_LM);
     subLM2.init();
     if (m_debug) {
         cout << endl;
@@ -360,6 +463,29 @@ subResult NonFlowSubtractor::fourierFit (TH1* hist, TH1* hist_LM) {
     return theResult;
 }
 
+subResult NonFlowSubtractor::fourierFitLM (TH1* hist) {
+
+    TF1* f_fourier = new TF1("f_fourier", _formula_LM.c_str(), m_dphiRangeLow, m_dphiRangeHigh);
+    hist->Fit("f_fourier", "0");
+
+    vector<float> vec_value;
+    vector<float> vec_error;
+    for (int ihar=0; ihar<getNHarLM(); ihar++){
+        vec_value.push_back(f_fourier->GetParameter(ihar+1));
+        vec_error.push_back(f_fourier->GetParError (ihar+1));
+    }
+
+    subResult theResult;
+    theResult.setNHar(getNHarLM());
+    theResult.setCoeffRaw(vec_value, vec_error);
+    theResult.setPedstalValue (f_fourier->GetParameter(0));
+    theResult.setPedstalError (f_fourier->GetParError(0));
+
+    delete f_fourier; f_fourier = 0;
+
+    return theResult;
+}
+
 
 
 subResult NonFlowSubtractor::periphSub  ( TH1* h_sr_lm, TH1* h_lr_lm, 
@@ -442,7 +568,7 @@ subResult NonFlowSubtractor::periphSub  (TH1* h_sr_lm,  TH1* h_lr_lm,
     subResult result_hm  = periphSub(h_sr_lm, h_lr_lm, h_sr_hm,  h_lr_hm);
 
     NonFlowSubtractor subLM2;
-    subLM2.setNHar(NonFlowSubtractor::m_nhar);
+    subLM2.setNHar(NonFlowSubtractor::m_nhar_HM);
     subLM2.init();
     subResult result_lm2 = subLM2.periphSub(h_sr_lm, h_lr_lm, h_sr_lm2, h_lr_lm2);
 
@@ -534,6 +660,30 @@ subResult NonFlowSubtractor::periphSub  (TH1* h_sr_lm,  TH1* h_lr_lm,
 
 
 
+// plot style for atlas template fitting using histogram as templates
+bool NonFlowSubtractor :: plotAtlasHistHM (TCanvas* theCanvas) {
+    if (!theCanvas) return false;
+    theCanvas->cd();
+
+    m_hist_HM->SetMarkerSize(0.8);
+    m_hist_HM->SetXTitle("#Delta#it{#phi}");
+    m_hist_HM->SetYTitle("#it{Y} (#Delta#it{#phi})");
+    m_hist_HM->SetLineWidth(1);
+    m_hist_HM->Draw("EX0SAME");
+    h_show_HM->SetLineColor(2);
+    h_show_HM->Draw("HISTSAME");
+    f_show_flow2->SetLineColor(kBlue);
+    f_show_flow2->SetLineStyle(2);
+    f_show_flow2->SetLineWidth(1);
+    f_show_flow2->Draw("same");
+
+    h_show_periph->SetMarkerStyle(24);
+    h_show_periph->SetMarkerSize(0.8);
+    h_show_periph->Draw("psame");
+
+    return true;
+}
+
 
 
 
@@ -560,6 +710,8 @@ bool NonFlowSubtractor :: plotAtlasHM (TPad* thePad) {
     return true;
 }
 
+
+
 void NonFlowSubtractor :: plotAtlasHMLabel (TPad* thePad) {
     thePad->cd();
     plotMarkerLineText(0.25, 0.88, 1.2, 1, 20, 1,1,"HM Data", 0.08, true);
@@ -568,6 +720,117 @@ void NonFlowSubtractor :: plotAtlasHMLabel (TPad* thePad) {
     plotMarkerLineText(0.25, 0.58, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}",0.08);
 }
 
+
+
+
+bool NonFlowSubtractor :: plotAtlasSubHM (TCanvas* theCanvas) {
+    if (!theCanvas) return false;
+    TH1F* h_pull = (TH1F*) m_hist_HM->Clone("h_Pull");
+    theCanvas->cd();
+
+    TPad *pad1 = new TPad("pad1","top pad",0,0.5,1,1);
+    pad1->SetTopMargin(0.07);
+    pad1->SetBottomMargin(0.);
+    theCanvas->cd();
+    pad1->Draw();
+    TPad *pad2 = new TPad("pad2","bottom pad",0,0,1,0.5);
+    pad2->SetTopMargin(0);
+    pad2->SetBottomMargin(0.2);
+    theCanvas->cd();
+    pad2->Draw();
+
+    pad1->cd();
+    int MaxBin = m_hist_HM->GetMaximumBin();
+    int MinBin = m_hist_HM->GetMinimumBin();
+    float distance = m_hist_HM->GetBinContent(MaxBin) - m_hist_HM->GetBinContent(MinBin);
+    distance /= 2.0;
+    double Max = m_hist_HM->GetBinContent(MaxBin) + distance;
+    double Min = m_hist_HM->GetBinContent(MinBin) - distance/3.;
+
+    m_hist_HM->SetMarkerSize(0.8);
+    m_hist_HM->SetYTitle("#it{Y}(#Delta#it{#phi})");
+    m_hist_HM->GetYaxis()->SetRangeUser(Min, Max);
+    m_hist_HM->GetListOfFunctions()->Add(f_HM);
+    m_hist_HM->GetYaxis()->SetNdivisions(508,kTRUE);
+    m_hist_HM->GetXaxis()->SetNdivisions(509,kTRUE);
+    m_hist_HM->GetYaxis()->SetLabelSize(0.06);
+    m_hist_HM->GetYaxis()->SetTitleSize(0.06);
+    m_hist_HM->GetYaxis()->SetTitleOffset(1.30);
+    m_hist_HM->GetXaxis()->SetTickLength(0.067);
+    m_hist_HM->Draw("EX0SAME");
+    f_show_flow2->SetLineColor(kBlue);
+    f_show_flow2->SetLineStyle(2);
+    f_show_flow2->Draw("same");
+    if (!m_fixC3) {
+        f_show_flow3->SetLineColor(kOrange+1);
+        f_show_flow3->SetLineStyle(3);
+        f_show_flow3->Draw("same");
+    }
+    f_show_periph->SetLineColor(kSpring+4);
+    f_show_periph->SetLineStyle(2);
+    f_show_periph->Draw("same");
+
+    plotMarkerLineText(0.55, 0.85, 1.0,1, 20, 1,1,"HM Data", 0.05, true);
+    plotMarkerLineText(0.55, 0.78, 0, 2, 1, 2, 1,"Fit", 0.05);
+    plotMarkerLineText(0.55, 0.71, 0, kSpring+4, 0, kSpring+4, 2,"#it{G} + #it{F}#it{Y}^{LM}", 0.05);
+    plotMarkerLineText(              0.74,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}",0.05);
+    if (!m_fixC3) plotMarkerLineText(0.74,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge} + #it{F}#it{Y}^{LM}", 0.05);
+
+    float _chi2 = 0;
+    for (int i=1; i<h_pull->GetXaxis()->GetNbins()+1; i++){
+        float _residual = m_hist_HM->GetBinContent(i) - f_HM->Eval(m_hist_HM->GetBinCenter(i));
+        float _pull = _residual / m_hist_HM->GetBinError(i);
+        h_pull->SetBinContent(i,_pull);
+        h_pull->SetBinError(i,m_hist_HM->GetBinError(i)/m_hist_HM->GetBinError(i));
+        _chi2 += pow(_residual/m_hist_HM->GetBinError(i),2);
+    }
+    _chi2 /= h_pull->GetXaxis()->GetNbins()-3;
+    m_h_pull = (TH1F*) h_pull->Clone("m_h_Pull");
+
+    pad2->cd();
+    int MaxBin_sub = m_h_ridge->GetMaximumBin();
+    int MinBin_sub = m_h_ridge->GetMinimumBin();
+    double Max_sub = TMath::Max( fabs(m_h_ridge->GetBinContent(MaxBin_sub)), fabs(m_h_ridge->GetBinContent(MinBin_sub)) )*4.;
+    double Min_sub = -1*Max_sub;
+    m_h_ridge->SetMarkerSize(0.8);
+    //m_h_ridge->SetLineWidth(1);
+    m_h_ridge->GetYaxis()->SetRangeUser(Min_sub, Max_sub);
+    m_h_ridge->SetXTitle("#Delta#it{#phi}");
+    m_h_ridge->SetYTitle(Form("(#it{Y}(#Delta#it{#phi}) - #it{F}#it{Y}^{LM}(#Delta#it{#phi}))#times%.0f", m_ridge_scaleFactor));
+    m_h_ridge->GetYaxis()->SetNdivisions(406,kTRUE);
+    m_h_ridge->GetYaxis()->SetLabelSize(0.06);
+    m_h_ridge->GetYaxis()->SetTitleSize(0.06);
+    m_h_ridge->GetYaxis()->SetTitleOffset(1.3);
+    m_h_ridge->GetYaxis()->CenterTitle(kTRUE);
+
+    m_h_ridge->GetXaxis()->SetTitleSize(0.07);
+    m_h_ridge->GetXaxis()->SetTitleOffset(1.0);
+    m_h_ridge->GetXaxis()->SetLabelSize(0.07);
+    m_h_ridge->GetXaxis()->SetTickLength(0.08);
+    m_h_ridge->Draw("EX0SAME");
+
+    f_show_ridge->SetLineStyle(1);
+    f_show_ridge->SetLineWidth(2);
+    f_show_ridge->SetLineColor(2);
+    f_show_ridge->Draw("same");
+
+    f_show_ridge2->SetLineColor(kBlue);
+    f_show_ridge2->SetLineStyle(2);
+    f_show_ridge2->Draw("same");
+    if (!m_fixC3) {
+        f_show_ridge3->SetLineColor(kOrange+1);
+        f_show_ridge3->SetLineStyle(3);
+        f_show_ridge3->Draw("same");
+    }
+    plotMarkerLineText(0.60, 0.85, 1.0,1, 20, 1,1,"Data", 0.05, true);
+    plotMarkerLineText(0.60, 0.78, 0, 2, 1, 2, 1,"#it{Y}^{ridge}", 0.05);
+    plotMarkerLineText(              0.74,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge}",0.05);
+    if (!m_fixC3) plotMarkerLineText(0.74,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge}", 0.05);
+
+    pad1->cd();
+
+    return true;
+}
 
 bool NonFlowSubtractor :: plotAtlasHM (TCanvas* theCanvas) {
     if (!theCanvas) return false;
@@ -593,6 +856,7 @@ bool NonFlowSubtractor :: plotAtlasHM (TCanvas* theCanvas) {
     distance /= 2.0;
     double Max = m_hist_HM->GetBinContent(MaxBin) + distance;
     double Min = m_hist_HM->GetBinContent(MinBin) - distance/3.;
+    //double Min = m_hist_HM->GetBinContent(MinBin) - distance;
     m_hist_HM->SetYTitle("#it{Y}(#Delta#it{#phi})");
     m_hist_HM->GetYaxis()->SetRangeUser(Min, Max);
     m_hist_HM->GetListOfFunctions()->Add(f_HM);
@@ -630,6 +894,7 @@ bool NonFlowSubtractor :: plotAtlasHM (TCanvas* theCanvas) {
         _chi2 += pow(_residual/m_hist_HM->GetBinError(i),2);
     }
     _chi2 /= h_pull->GetXaxis()->GetNbins()-3;
+    m_h_pull = (TH1F*) h_pull->Clone("m_h_Pull");
 
     pad2->cd();
     h_pull->SetMaximum(4.9);
