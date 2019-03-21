@@ -56,6 +56,8 @@ class NonFlowSubtractor {
     static int getNHarLM() {return m_nhar_LM;}
     static void setNHarLM(int n) {m_nhar_LM = n;}
 
+    TH1F* getChi2Hist() {return h_chi2_c2;}
+
   private:
     // total number of parameters of ATLAS fit for LM events
     int m_nparLmAtlas; // should be m_nhar_LM + 1
@@ -206,6 +208,7 @@ class NonFlowSubtractor {
 
     TH1F* h_show_periph;
     TH1F* h_show_HM;
+    TH1F* h_chi2_c2;
 };
 #endif
 

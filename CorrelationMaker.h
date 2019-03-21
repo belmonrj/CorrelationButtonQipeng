@@ -63,7 +63,9 @@ class CorrelationMaker {
     virtual TH1* MakeCorr(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method = 1);
 
     // for UPC analysis
-    virtual TH1* MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method = 1);
+    virtual TH1*  MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method = 1);
+    virtual float GetPtMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high);
+    virtual float GetMultMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high);
 
     // Additional dimensions
     // for D meson, invariant mass
@@ -310,6 +312,84 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
     hphi->SetName(Form("h_pty_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.0fto%.0f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
 
     return hphi;
+}
+
+
+
+float CorrelationMaker::GetPtMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high) {
+
+    TH2D* h1 = 0;
+
+    int index_Nch_low = 0;
+    int index_Nch_high = 0;
+    for (int iNch=1; iNch<m_anaConfig->getInputMultiBinning()->GetXaxis()->GetNbins() + 1; iNch++){
+        if (m_anaConfig->getInputMultiBinning()->GetXaxis()->GetBinLowEdge(iNch) == _Nch_low)  index_Nch_low  = iNch - 1; 
+        if (m_anaConfig->getInputMultiBinning()->GetXaxis()->GetBinUpEdge(iNch)  == _Nch_high) index_Nch_high = iNch - 1; 
+    }
+
+
+    int index_pt_low = 0;
+    int index_pt_high = 0;
+    for (int ipt=1; ipt<m_anaConfig->getInputPtBinning()->GetXaxis()->GetNbins() + 1; ipt++){
+        if (m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) == _pt_low)  index_pt_low  = ipt - 1; 
+        if (m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  == _pt_high) index_pt_high = ipt - 1; 
+    }
+
+    m_anaConfig->inputFile()->cd();
+
+    for (int iNch=index_Nch_low; iNch<index_Nch_high+1; iNch++) {
+        for (int ipt=index_pt_low; ipt<index_pt_high+1; ipt++) {
+
+	        TH2F* htemp_1 = (TH2F*)gDirectory->Get(Form("h_pt_mult_trig_same_Mq%d_ptq%d_Sq0_tq0_Pq1", iNch, ipt));
+
+	        if (iNch==index_Nch_low && ipt==index_pt_low) {
+	            h1 = (TH2D*) htemp_1->Clone(Form("h1_Nch%d_%d_pt%d_pt%d", index_Nch_low, index_Nch_high, index_pt_low, index_pt_high));
+	        } else {
+                h1->Add(htemp_1);
+	        }
+	        delete htemp_1;
+        }
+    }
+    return h1->GetMean(1);
+}
+
+
+
+float CorrelationMaker::GetMultMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high) {
+
+    TH2D* h1 = 0;
+
+    int index_Nch_low = 0;
+    int index_Nch_high = 0;
+    for (int iNch=1; iNch<m_anaConfig->getInputMultiBinning()->GetXaxis()->GetNbins() + 1; iNch++){
+        if (m_anaConfig->getInputMultiBinning()->GetXaxis()->GetBinLowEdge(iNch) == _Nch_low)  index_Nch_low  = iNch - 1; 
+        if (m_anaConfig->getInputMultiBinning()->GetXaxis()->GetBinUpEdge(iNch)  == _Nch_high) index_Nch_high = iNch - 1; 
+    }
+
+
+    int index_pt_low = 0;
+    int index_pt_high = 0;
+    for (int ipt=1; ipt<m_anaConfig->getInputPtBinning()->GetXaxis()->GetNbins() + 1; ipt++){
+        if (m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) == _pt_low)  index_pt_low  = ipt - 1; 
+        if (m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  == _pt_high) index_pt_high = ipt - 1; 
+    }
+
+    m_anaConfig->inputFile()->cd();
+
+    for (int iNch=index_Nch_low; iNch<index_Nch_high+1; iNch++) {
+        for (int ipt=index_pt_low; ipt<index_pt_high+1; ipt++) {
+
+	        TH2F* htemp_1 = (TH2F*)gDirectory->Get(Form("h_pt_mult_trig_same_Mq%d_ptq%d_Sq0_tq0_Pq1", iNch, ipt));
+
+	        if (iNch==index_Nch_low && ipt==index_pt_low) {
+	            h1 = (TH2D*) htemp_1->Clone(Form("h1_Nch%d_%d_pt%d_pt%d", index_Nch_low, index_Nch_high, index_pt_low, index_pt_high));
+	        } else {
+                h1->Add(htemp_1);
+	        }
+	        delete htemp_1;
+        }
+    }
+    return h1->GetMean(2);
 }
 
 
@@ -580,8 +660,11 @@ TH2* CorrelationMaker::Make2DCorrUpc(float _pt_low, float _pt_high, float _Nch_l
     for (int iNch=index_Nch_low; iNch<index_Nch_high+1; iNch++) {
         for (int ipt=index_pt_low; ipt<index_pt_high+1; ipt++) {
 
+            //h2_deta_dphi_mixed_Mq7_ptq4_Sq0_tq0_Pq1
 	        TH2* htemp_1 = (TH2*)gDirectory->Get(Form("%sMq%d_ptq%d_Pq1",path_sig.c_str(),iNch,ipt));
 	        TH2* htemp_2 = (TH2*)gDirectory->Get(Form("%sMq%d_ptq%d_Sq0_tq0_Pq1",path_mix.c_str(),iNch,ipt));
+
+            htemp_2->Scale(htemp_1->Integral()/htemp_2->Integral());
 
             nsig += h2_nsig->GetBinContent(ipt+1, iNch+1);
 
@@ -615,9 +698,7 @@ TH2* CorrelationMaker::Make2DCorrUpc(float _pt_low, float _pt_high, float _Nch_l
             cout << "int_C = " << int_C << endl;
             cout << "K = " << K << endl;
         }
-        cout << h_correlation->Integral() << endl;
         h_correlation->Scale(K/nsig, "width"); //per trigger & per deltaPhi yield 
-        cout << h_correlation->Integral() << endl;
 
     } else if (method == 2) {
         // no mixxing correction
@@ -894,7 +975,7 @@ void CorrelationMaker::Plot2DCorrelation(TH2* h1, TCanvas* c1) {
     ATLASLabel(0.02,0.94,"Internal");
     //myText(    0.02,0.89,1,"#it{p}+Pb #sqrt{#it{s}_{NN}} = 8.16 TeV");
     //myText(    0.02,0.83,1,"#it{h}-#it{h} Correlation");
-    //myText(    0.02,0.12,1,"0.5 < #it{p}_{T}^{trig,assco} < 5 GeV");
+    //myText(    0.02,0.12,1,"0.5 < #it{p}_{T}^{trig,asso} < 5 GeV");
     pad->SetTheta(60); // default is 30
     pad->SetPhi(45); // default is 30
     pad->Update();
