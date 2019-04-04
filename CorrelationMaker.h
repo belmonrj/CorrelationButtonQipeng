@@ -63,9 +63,9 @@ class CorrelationMaker {
     virtual TH1* MakeCorr(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method = 1);
 
     // for UPC analysis
-    virtual TH1*  MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method = 1);
-    virtual float GetPtMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high);
-    virtual float GetMultMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high);
+    virtual TH1*  MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method = 1, int type = 1);
+    virtual float GetPtMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int type = 1);
+    virtual float GetMultMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int type = 1);
 
     // Additional dimensions
     // for D meson, invariant mass
@@ -316,7 +316,7 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
 
 
 
-float CorrelationMaker::GetPtMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high) {
+float CorrelationMaker::GetPtMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int type) {
 
     TH2D* h1 = 0;
 
@@ -340,7 +340,7 @@ float CorrelationMaker::GetPtMean(float _pt_low, float _pt_high, float _Nch_low,
     for (int iNch=index_Nch_low; iNch<index_Nch_high+1; iNch++) {
         for (int ipt=index_pt_low; ipt<index_pt_high+1; ipt++) {
 
-	        TH2F* htemp_1 = (TH2F*)gDirectory->Get(Form("h_pt_mult_trig_same_Mq%d_ptq%d_Sq0_tq0_Pq1", iNch, ipt));
+	        TH2F* htemp_1 = (TH2F*)gDirectory->Get(Form("h_pt_mult_trig_same_Mq%d_ptq%d_Sq0_tq0_Pq%d", iNch, ipt, type));
 
 	        if (iNch==index_Nch_low && ipt==index_pt_low) {
 	            h1 = (TH2D*) htemp_1->Clone(Form("h1_Nch%d_%d_pt%d_pt%d", index_Nch_low, index_Nch_high, index_pt_low, index_pt_high));
@@ -355,7 +355,7 @@ float CorrelationMaker::GetPtMean(float _pt_low, float _pt_high, float _Nch_low,
 
 
 
-float CorrelationMaker::GetMultMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high) {
+float CorrelationMaker::GetMultMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int type) {
 
     TH2D* h1 = 0;
 
@@ -379,7 +379,7 @@ float CorrelationMaker::GetMultMean(float _pt_low, float _pt_high, float _Nch_lo
     for (int iNch=index_Nch_low; iNch<index_Nch_high+1; iNch++) {
         for (int ipt=index_pt_low; ipt<index_pt_high+1; ipt++) {
 
-	        TH2F* htemp_1 = (TH2F*)gDirectory->Get(Form("h_pt_mult_trig_same_Mq%d_ptq%d_Sq0_tq0_Pq1", iNch, ipt));
+	        TH2F* htemp_1 = (TH2F*)gDirectory->Get(Form("h_pt_mult_trig_same_Mq%d_ptq%d_Sq0_tq0_Pq%d", iNch, ipt, type));
 
 	        if (iNch==index_Nch_low && ipt==index_pt_low) {
 	            h1 = (TH2D*) htemp_1->Clone(Form("h1_Nch%d_%d_pt%d_pt%d", index_Nch_low, index_Nch_high, index_pt_low, index_pt_high));
@@ -394,7 +394,7 @@ float CorrelationMaker::GetMultMean(float _pt_low, float _pt_high, float _Nch_lo
 
 
 
-TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method) {
+TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method, int type) {
 
     TH2D* h1 = 0;
     TH2D* h2 = 0;
@@ -445,14 +445,20 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
     float nsig = 0;
     for (int iNch=index_Nch_low; iNch<index_Nch_high+1; iNch++) {
         for (int ipt=index_pt_low; ipt<index_pt_high+1; ipt++) {
+            cout << iNch << "\t" << ipt << endl;
 
             // example names
-            //h_deta_dphi_same_Mq4_ptq2_Pq1;1	
+            //h_deta_dphi_same_Mq4_ptq2_Pq1	
+            //h_deta_dphi_same_Mq1_ptq4_Pq0
             //h2_deta_dphi_mixed_Mq4_ptq2_Sq0_tq0_Pq1;1 
-	        TH2D* htemp_1 = (TH2D*)gDirectory->Get(Form("%sMq%d_ptq%d_Pq1",path_sig.c_str(),iNch,ipt));
-	        TH2D* htemp_2 = (TH2D*)gDirectory->Get(Form("%sMq%d_ptq%d_Sq0_tq0_Pq1",path_mix.c_str(),iNch,ipt));
+	        TH2D* htemp_1 = (TH2D*)gDirectory->Get(Form("%sMq%d_ptq%d_Pq%d",path_sig.c_str(),iNch, ipt, type));
+	        TH2D* htemp_2 = (TH2D*)gDirectory->Get(Form("%sMq%d_ptq%d_Sq0_tq0_Pq%d",path_mix.c_str(),iNch, ipt, type));
 
             nsig += h2_nsig->GetBinContent(ipt+1, iNch+1);
+            cout << Form("%sMq%d_ptq%d_Pq%d",path_sig.c_str(),iNch, ipt, type) << endl;
+            cout << "\tnsig = " <<  h2_nsig->GetBinContent(ipt+1, iNch+1) << endl;
+            htemp_1->Print();
+            cout << "-------------" << endl;
 
 	        if (iNch==index_Nch_low && ipt==index_pt_low) {
 	            h1 = (TH2D*) htemp_1->Clone(Form("h1_Nch%d_%d_pt%d_pt%d", index_Nch_low, index_Nch_high, index_pt_low, index_pt_high));

@@ -141,6 +141,119 @@ subResult NonFlowSubtractor :: templateHistFit(TH1* hist_LM, TH1* hist_HM) {
 
 
 
+subResult NonFlowSubtractor :: templateHistFit(TH1* hist_LM, TH1* hist_LM_bulk, TH1* hist_HM) {
+    m_hist_LMtemp = (TH1F*)hist_LM->Clone("hist_LMtemp");
+    m_hist_LMtemp_bulk = (TH1F*)hist_LM_bulk->Clone("hist_LMtemp_bulk");
+
+    f_HM = new TF1("f_HM", templ_hist2, m_dphiRangeLow, m_dphiRangeHigh, getNHar()+3);
+
+    for (int ipar=0; ipar<getNHar(); ipar++) {
+        f_HM->SetParName(ipar,Form("c%d",ipar+1));
+    }
+    f_HM->SetParName(getNHar(),"F");
+    f_HM->SetParName(getNHar()+1,"G");
+    f_HM->SetParName(getNHar()+2,"p");
+
+    f_HM->FixParameter(0,0);
+    f_HM->SetParameter(getNHar()+2,0.15);
+    //f_HM->SetParameter(getNHar()+3,0.75);
+
+    hist_HM->Fit("f_HM", "0US");
+    m_hist_HM = (TH1F*)hist_HM->Clone("__hist_HM");
+
+    subResult theResult;
+    vector<float> vec_value_sub;
+    vector<float> vec_error_sub;
+
+    for (int i=0; i<getNHar(); i++) {
+        vec_value_sub.push_back(f_HM->GetParameter(i));
+        vec_error_sub.push_back(f_HM->GetParError(i));
+
+    }
+    theResult.setCoeffSub(vec_value_sub, vec_error_sub);
+
+    // construct stuffs for plotting
+    f_show_periph = new TF1("f_show_periph", f_periph_hist2, m_dphiRangeLow, m_dphiRangeHigh, 3);
+    f_show_periph->SetParameter(0, f_HM->GetParameter(getNHar()));
+    f_show_periph->SetParameter(1, f_HM->GetParameter(getNHar()+1));
+    f_show_periph->SetParameter(2, f_HM->GetParameter(getNHar()+2));
+    //f_show_periph->SetParameter(3, f_HM->GetParameter(getNHar()+3));
+
+    f_show_flow2 = new TF1("f_show_flow2","[0] + 2*[1]*[2]*cos(2*x)", m_dphiRangeLow, m_dphiRangeHigh);
+    f_show_flow2->SetParameter(0, f_show_periph->Eval(0));
+    f_show_flow2->SetParameter(1, f_HM->GetParameter(getNHar()+1) );
+    f_show_flow2->SetParameter(2, f_HM->GetParameter(1)); // c2
+
+    if (!m_fixC3) {  
+        f_show_flow3 = new TF1("f_show_flow3","[0] + [1]*2*[2]*cos(3*x)", m_dphiRangeLow, m_dphiRangeHigh);
+        f_show_flow3->SetParameter(0, f_show_periph->Eval(0));
+        f_show_flow3->SetParameter(1, f_HM->GetParameter(getNHar()+1));
+        f_show_flow3->SetParameter(2, f_HM->GetParameter(2)); // c3
+    }
+
+    h_show_periph      = (TH1F*)hist_LM     ->Clone("h_show_periph");
+    h_show_periph_bulk = (TH1F*)hist_LM_bulk->Clone("h_show_periph_bulk");
+    m_plotBulkRef = true;
+
+    h_show_HM = (TH1F*)hist_LM->Clone("h_show_HM");
+    h_show_HM->Reset();
+
+    for (int ibin = 1; ibin < h_show_periph->GetNbinsX()+1; ibin++) {
+        float _xx = h_show_periph->GetXaxis()->GetBinCenter(ibin);
+        h_show_periph     ->SetBinContent(ibin, hist_LM->GetBinContent(ibin)      * f_HM->GetParameter(getNHar()+2)     * f_HM->GetParameter(getNHar()) + f_HM->GetParameter(getNHar()+1));
+        h_show_periph_bulk->SetBinContent(ibin, hist_LM_bulk->GetBinContent(ibin) * (1-f_HM->GetParameter(getNHar()+2)) * f_HM->GetParameter(getNHar()) + f_HM->GetParameter(getNHar()+1));
+        //h_show_periph     ->SetBinContent(ibin, hist_LM->GetBinContent(ibin)      * f_HM->GetParameter(getNHar()) + f_HM->GetParameter(getNHar()+1));
+        //h_show_periph_bulk->SetBinContent(ibin, hist_LM_bulk->GetBinContent(ibin) * f_HM->GetParameter(getNHar()) + f_HM->GetParameter(getNHar()+1));
+        //h_show_periph->SetBinContent(ibin, f_HM->Eval(_xx));
+        h_show_HM->SetBinContent(ibin, f_HM->Eval(_xx));
+    }
+
+    m_h_ridge = (TH1F*) m_hist_HM->Clone("h_ridge");
+    m_h_ridge->Reset();
+    for (int i=1; i<m_hist_HM->GetXaxis()->GetNbins()+1; i++){
+        float _xx = m_hist_HM->GetXaxis()->GetBinCenter(i);
+        float _residual = m_hist_HM->GetBinContent(i) - f_show_periph->Eval(_xx);
+        _residual *= m_ridge_scaleFactor;
+        float _residual_error = m_hist_HM->GetBinError(i)*m_ridge_scaleFactor;
+        m_h_ridge->SetBinContent(i,_residual);
+        m_h_ridge->SetBinError  (i,_residual_error);
+    }
+
+    f_show_ridge2 = new TF1("f_show_ridge2","[0]*2*[1]*cos(2*x)", m_dphiRangeLow, m_dphiRangeHigh);
+    f_show_ridge2->SetParameter(0, f_HM->GetParameter(getNHar()+1)*m_ridge_scaleFactor);
+    f_show_ridge2->SetParameter(1, f_HM->GetParameter(1)); // c2
+
+    if (!m_fixC3) {  
+        f_show_ridge3 = new TF1("f_show_ridge3","[0]*2*[1]*cos(3*x)", m_dphiRangeLow, m_dphiRangeHigh);
+        f_show_ridge3->SetParameter(0, f_HM->GetParameter(getNHar()+1)*m_ridge_scaleFactor);
+        f_show_ridge3->SetParameter(1, f_HM->GetParameter(2)); // c3
+    }
+
+    std::string _formula_ridge;
+    _formula_ridge = "[0]*2*([1]*cos(2*x)";
+    if (!m_fixC3) {
+        _formula_ridge += (" + [2]*cos(3*x)");
+    }
+    if (!m_fixC4) {
+        _formula_ridge += (" + [3]*cos(4*x)");
+    }
+    _formula_ridge += (")");
+
+    f_show_ridge = new TF1("f_show_ridge",_formula_ridge.c_str(), m_dphiRangeLow, m_dphiRangeHigh);
+    f_show_ridge->SetParameter(0, f_HM->GetParameter(getNHar()+1)*m_ridge_scaleFactor);
+    f_show_ridge->SetParameter(1, f_HM->GetParameter(1)); // c2
+    if (!m_fixC3) {
+        f_show_ridge->SetParameter(2, f_HM->GetParameter(2)); // c3
+    }
+    if (!m_fixC4) {
+        f_show_ridge->SetParameter(3, f_HM->GetParameter(3)); // c4
+    }
+
+    return theResult;
+}
+
+
+
 subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     // procedure largely based on https://root.cern/doc/master/combinedFit_8C_source.html
 
@@ -852,9 +965,15 @@ bool NonFlowSubtractor :: plotAtlasHistSubHM (TCanvas* theCanvas) {
     int MaxBin = m_hist_HM->GetMaximumBin();
     int MinBin = m_hist_HM->GetMinimumBin();
     float distance = m_hist_HM->GetBinContent(MaxBin) - m_hist_HM->GetBinContent(MinBin);
+    if (m_plotBulkRef) {
+        distance = m_hist_HM->GetBinContent(MaxBin) - h_show_periph->GetBinContent(h_show_periph->GetMinimumBin());
+    }
     distance /= 4;
     double Max = m_hist_HM->GetBinContent(MaxBin) + distance;
     double Min = m_hist_HM->GetBinContent(MinBin) - distance/2.5;
+    if (m_plotBulkRef) {
+        Min = h_show_periph->GetBinContent(h_show_periph->GetMinimumBin()) - distance/2.5;
+    }
 
     m_hist_HM->SetMarkerSize(1.3);
     m_hist_HM->SetYTitle("#it{Y}(#Delta#it{#phi})");
@@ -884,12 +1003,23 @@ bool NonFlowSubtractor :: plotAtlasHistSubHM (TCanvas* theCanvas) {
     h_show_periph->SetMarkerStyle(24);
     h_show_periph->SetMarkerSize(1.3);
     h_show_periph->Draw("psame");
+    if (m_plotBulkRef) {
+        h_show_periph_bulk->SetMarkerStyle(26);
+        h_show_periph_bulk->SetMarkerColor(4);
+        h_show_periph_bulk->SetMarkerSize(1.3);
+        h_show_periph_bulk->Draw("psame");
+    }
 
     plotMarkerLineText(0.22, 0.78, 1.0, 1, 20, 1, 1,"#bf{HM Data}", 0.05, true);
     plotMarkerLineText(0.22, 0.71, 0, 2, 1, 2, 1,"#bf{Fit}", 0.05);
-    plotMarkerLineText(0.22, 0.64, 1.0, 1, 24, 1, 1,"#bf{#it{G} + #it{F}#it{Y}^{LM}}", 0.05, true);
-    plotMarkerLineText(              0.42,0.78, 0, 4, 0, 4, 2,"#bf{#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}}",0.05);
-    if (!m_fixC3) plotMarkerLineText(0.42,0.71, 0, kOrange+1, 0, kOrange+1, 3,"#bf{#it{Y}_{3}^{ridge} + #it{F}#it{Y}^{LM}}", 0.05);
+    if (m_plotBulkRef) {
+        plotMarkerLineText(0.22, 0.64, 1.0, 1, 24, 1, 1,"#bf{#it{G} + #it{Fp}#it{Y}^{LM}_{1}}", 0.05, true);
+        plotMarkerLineText(0.22, 0.57, 1.0, 4, 26, 4, 1,"#bf{#it{G} + #it{F(1-p)}#it{Y}^{LM}_{2}}", 0.05, true);
+    } else {
+        plotMarkerLineText(0.22, 0.64, 1.0, 1, 24, 1, 1,"#bf{#it{G} + #it{F}#it{Y}^{LM}}", 0.05, true);
+    }
+    plotMarkerLineText(              0.42,0.78, 0, 4, 0, 4, 2,"#bf{#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}(0)}",0.05);
+    if (!m_fixC3) plotMarkerLineText(0.42,0.71, 0, kOrange+1, 0, kOrange+1, 3,"#bf{#it{Y}_{3}^{ridge} + #it{F}#it{Y}^{LM}(0)}", 0.05);
 
     /*
     float _chi2 = 0;
@@ -913,7 +1043,11 @@ bool NonFlowSubtractor :: plotAtlasHistSubHM (TCanvas* theCanvas) {
     //m_h_ridge->SetLineWidth(1);
     m_h_ridge->GetYaxis()->SetRangeUser(Min_sub, Max_sub);
     m_h_ridge->SetXTitle("#Delta#it{#phi}");
-    m_h_ridge->SetYTitle(Form("(#it{Y}(#Delta#it{#phi}) - #it{F}#it{Y}^{LM}(#Delta#it{#phi}))#times%.0f", m_ridge_scaleFactor));
+    if (m_ridge_scaleFactor != 1.0) {
+        m_h_ridge->SetYTitle(Form("(#it{Y}(#Delta#it{#phi}) - #it{F}#it{Y}^{LM}(#Delta#it{#phi}))#times%.0f", m_ridge_scaleFactor));
+    } else {
+        m_h_ridge->SetYTitle(Form("#it{Y}(#Delta#it{#phi}) - #it{F}#it{Y}^{LM}(#Delta#it{#phi})"));
+    }
     m_h_ridge->GetYaxis()->SetNdivisions(506,kTRUE);
     m_h_ridge->GetYaxis()->SetLabelFont(43);
     m_h_ridge->GetYaxis()->SetLabelSize(25);

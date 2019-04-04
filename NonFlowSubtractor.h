@@ -45,6 +45,7 @@ class NonFlowSubtractor {
     static int m_nhar_LM;
     static int m_nhar_HM;
     static TH1F* m_hist_LMtemp; // histogram tempalte for LM
+    static TH1F* m_hist_LMtemp_bulk; // histogram tempalte for LM of bulk-bulk correlation
 
   public:
     // interface to control Nhar for HM in atlas fit
@@ -109,6 +110,7 @@ class NonFlowSubtractor {
     // using hist_LM as template instead of fitting it
     // steal from Soumya
     subResult templateHistFit(TH1* hist_LM, TH1* hist_HM);
+    subResult templateHistFit(TH1* hist_LM, TH1* hist_LM_bulk, TH1* hist_HM);
 
     //---------------------------------
     // peripheral subtraction used by CMS
@@ -181,13 +183,16 @@ class NonFlowSubtractor {
 
     // LM hist template version
     static double templ_hist   (double *x, double *par);
+    static double templ_hist2  (double *x, double *par);
     static double f_periph_hist(double *x, double *par);
+    static double f_periph_hist2(double *x, double *par);
 
     bool m_fixC1;
     bool m_fixC3;
     bool m_fixC4;
     bool m_applyZYAM;
     bool m_fixLM;
+    bool m_plotBulkRef;
 
     float m_ridge_scaleFactor;
 
@@ -207,6 +212,7 @@ class NonFlowSubtractor {
     TF1* f_show_ridge3; //w/o pedstal
 
     TH1F* h_show_periph;
+    TH1F* h_show_periph_bulk;
     TH1F* h_show_HM;
     TH1F* h_chi2_c2;
 };
@@ -217,6 +223,7 @@ class NonFlowSubtractor {
 int NonFlowSubtractor::m_nhar_LM = 4;
 int NonFlowSubtractor::m_nhar_HM = 4;
 TH1F* NonFlowSubtractor::m_hist_LMtemp = 0;
+TH1F* NonFlowSubtractor::m_hist_LMtemp_bulk = 0;
 
 
 
@@ -229,7 +236,8 @@ NonFlowSubtractor :: NonFlowSubtractor() {
     m_h_pull = 0;
     m_h_ridge = 0;
 
-    m_ridge_scaleFactor = 1e3;
+    m_plotBulkRef = false;
+    m_ridge_scaleFactor = 1;
 
     m_dphiRangeLow = -0.5*TMath::Pi();
     m_dphiRangeHigh = 1.5*TMath::Pi();
@@ -352,3 +360,21 @@ double NonFlowSubtractor::f_periph_hist(double *x, double *par) {
     return f;
 }
 
+
+double NonFlowSubtractor::templ_hist2(double *x, double *par) {
+    double xx = x[0];
+    double _pty_LM = par[getNHar()] * ( par[getNHar()+2]     * m_hist_LMtemp     ->GetBinContent(m_hist_LMtemp->FindBin(xx)) 
+                                      + (1-par[getNHar()+2]) * m_hist_LMtemp_bulk->GetBinContent(m_hist_LMtemp_bulk->FindBin(xx)) 
+                                      );
+    double f = _pty_LM + par[getNHar()+1]*f_ridge(x, &par[0]);
+    return f;
+}
+
+// for plotting
+double NonFlowSubtractor::f_periph_hist2(double *x, double *par) {
+    double xx = x[0];
+    double f = par[0] * ( par[2] * m_hist_LMtemp     ->GetBinContent(m_hist_LMtemp->FindBin(xx)) 
+                    + (1-par[2]) * m_hist_LMtemp_bulk->GetBinContent(m_hist_LMtemp_bulk->FindBin(xx))
+                       ) + par[1] ;
+    return f;
+}
