@@ -52,6 +52,7 @@ class CorrelationMaker {
     void generateHist_bkgSub();
 
     float weight2016HFAna(int index_Nch);
+    float weight2016DzeroAna(int index_Nch);
 
     // main function for generating single 1D correlation histogram
     // method1 -- ATLAS mixed event normalization, projection first, then take ratio (default ATLAS method)
@@ -125,6 +126,15 @@ float CorrelationMaker::weight2016HFAna(int index_Nch) {
     else if (index_Nch<24) _lumi = 4.394;
     else _lumi = 55.163;
     return 1./_lumi;
+}
+
+
+
+float CorrelationMaker::weight2016DzeroAna(int index_Nch) {
+    // use 1./lumi for this analysis
+    float efficiency = 1.;
+    if (index_Nch >= 28) efficiency = 0.85; // hard-coded hatch for D zero analysis systemaitcs for L1_TE200 ineffiency
+    return 1./efficiency;
 }
 
 

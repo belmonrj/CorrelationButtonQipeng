@@ -21,6 +21,11 @@ class subResult {
         m_coeff_sub_error = vec_error; 
     }
 
+    void setCoeffSubMinos(vector<float>& vec_error_lower, vector<float>& vec_error_upper) { 
+        m_coeff_sub_lowerError = vec_error_lower; 
+        m_coeff_sub_upperError = vec_error_upper; 
+    }
+
     void setCoeffSubImp(vector<float>& vec_value, vector<float>& vec_error) { 
         m_coeff_subImp_value = vec_value; 
         m_coeff_subImp_error = vec_error; 
@@ -41,6 +46,7 @@ class subResult {
 
     // advanced usage
     void  setNHar(int _n) {m_nhar = _n;}
+    int   getNHar()     {return m_nhar;}
     float getRhoValue() {return m_rho_value;}
     float getRhoError() {return m_rho_error;}
     void  setRhoValue(float _val) {m_rho_value = _val;}
@@ -68,6 +74,16 @@ class subResult {
 
     float getCoeffSubError(int order) {
         if (order < m_nhar+1 && m_coeff_sub_value.size() > order-1) return m_coeff_sub_error[order-1];
+        else return 0;
+    }
+
+    float getCoeffSubLowerError(int order) {
+        if (order < m_nhar+1 && m_coeff_sub_lowerError.size() > order-1) return m_coeff_sub_lowerError[order-1];
+        else return 0;
+    }
+
+    float getCoeffSubUpperError(int order) {
+        if (order < m_nhar+1 && m_coeff_sub_upperError.size() > order-1) return m_coeff_sub_upperError[order-1];
         else return 0;
     }
 
@@ -102,8 +118,12 @@ class subResult {
     // subtracted flow coefficients
     vector<float> m_coeff_sub_value;
     vector<float> m_coeff_sub_error;
+    // introduce members for handling Minos errors
+    // not sure if it's needed for raw or subImp coefficients
+    vector<float> m_coeff_sub_lowerError;
+    vector<float> m_coeff_sub_upperError;
 
-    // subtracted and corrected (for LM flow) fllow coefficeints
+    // subtracted and corrected (for LM flow) flow coefficeints
     vector<float> m_coeff_subImp_value;
     vector<float> m_coeff_subImp_error;
 

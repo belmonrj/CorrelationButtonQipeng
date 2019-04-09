@@ -260,6 +260,9 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     const int Npar(getNHarLM() + getNHar() + 3);
     const int Npar_LM(getNHarLM() + 1);
 
+    const int _flowCoefIndex_begin = Npar_LM;
+    const int _flowCoefIndex_end = Npar_LM + getNHar();
+
     subResult theResult;
 
     f_LM = new TF1("f_LM", f_periph, m_dphiRangeLow, m_dphiRangeHigh, Npar_LM, 1);
@@ -269,9 +272,11 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     f_HM = new TF1("f_HM", templ, m_dphiRangeLow, m_dphiRangeHigh, Npar, 1);
     f_HM->SetLineColor(2);
 
-    cout << "-----" << endl;
-    cout << Npar << endl;
-    f_HM->Print();
+    if (m_debug) {
+        cout << "-----" << endl;
+        cout << "Npar = " << Npar << endl;
+        f_HM->Print();
+    }
 
 
     vector <double> parInitValues;
@@ -323,8 +328,19 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
 
     ROOT::Fit::Fitter fitter;
     fitter.Config().SetParamsSettings(Npar, &parInitValues.at(0));
-    fitter.Config().MinimizerOptions().SetPrintLevel(1);
+    // print level 
+    // 0 = Quiet (Default in ROOT)
+    // 1 = just fit results (Default in this tool)
+    // 2 = fit results with iterations
+    // 3 = Verbose (additional details of iterations)
+    fitter.Config().MinimizerOptions().SetPrintLevel(0);
     fitter.Config().SetMinimizer("Minuit2","Migrad");
+    vector<unsigned int> minosErr_index;
+    // only run minos errors for flow coefficents
+    for (int i = _flowCoefIndex_begin; i < _flowCoefIndex_end; i++) {
+        minosErr_index.push_back(i);
+    }
+    fitter.Config().SetMinosErrors( minosErr_index);
 
     if (m_fixC1) {
         fitter.Config().ParSettings(Npar_LM).SetValue(0);
@@ -358,6 +374,8 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
         cout << endl;
     }
 
+
+    //bool ROOT::Fit::Fitter::FitFCN (unsigned int npar, Function& fcn, const double* params = 0, unsigned int dataSize = 0, bool chi2fit = false)
     fitter.FitFCN(Npar, globalChi2, 0, data_LM.Size()+data_HM.Size(), true);
     
     if (!m_fixLM) {
@@ -370,8 +388,15 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
 
     ROOT::Fit::FitResult result = fitter.Result();
     if (m_debug) {
+        cout << endl;
+        cout << "****************************************" << endl;
+        cout << "Fit results: " << endl;
         result.Print(std::cout);
+        cout << endl;
+        cout << "+===================================================" << endl;
+        cout << "CovMatrix after fit: " << endl;
         result.PrintCovMatrix(std::cout);
+        cout << endl;
     }
 
     double _value_F_temp = result.Value   (Npar-2);
@@ -385,6 +410,7 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
                                                   + pow(_error_G_HM/_value_G_HM, 2)
                                                   + pow(_error_F_temp/_value_F_temp,2));
 
+    // fill the output result class
     theResult.setNHar(getNHar());
     theResult.setChi2(result.Chi2() / result.Ndf());
     theResult.setPedstalValue (_value_G_HM);
@@ -395,39 +421,56 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     vector<float> vec_value_sub;
     vector<float> vec_error_sub;
     vector<float> vec_correlation;
+    vector<float> vec_minos_lower;
+    vector<float> vec_minos_upper;
     for (int ihar=0; ihar<getNHar(); ihar++){
         vec_value_sub.push_back(result.Value   (Npar_LM+ihar) );
         vec_error_sub.push_back(result.ParError(Npar_LM+ihar) );
         // F-coefficient correlation is used for rho-coefficient correlation
         // used for improved fit error calculation
         vec_correlation.push_back(result.Correlation(Npar-2, Npar_LM+ihar)*(_value_G_LM/_value_G_HM) );
+
+        vec_minos_lower.push_back(result.LowerError(Npar_LM+ihar));
+        vec_minos_upper.push_back(result.UpperError(Npar_LM+ihar));
     }
+
     theResult.setCoeffSub(vec_value_sub, vec_error_sub);
     theResult.setRhoCorrelation(vec_correlation);
+    theResult.setCoeffSubMinos(vec_minos_lower, vec_minos_upper);
 
     if (m_debug) {
         cout << endl;
-        cout << " ===================================================" << endl;
+        cout << endl;
+        cout << "+===================================================" << endl;
         cout << " Check relative errors" << endl;
-        cout << "   G_LM\tvalue = " << _value_G_LM 
+        cout << "   G_LM\tvalue = " << std::scientific << _value_G_LM 
              << "\terror = " << _error_G_LM 
              << "\trel_error = " << _error_G_LM/ _value_G_LM 
              << endl;
 
-        cout << "   G_HM\tvalue = " << _value_G_HM 
+        cout << "   G_HM\tvalue = " << std::scientific << _value_G_HM 
              << "\terror = " << _error_G_HM 
              << "\trel_error = " << _error_G_HM/ _value_G_HM 
              << endl;
 
-        cout << "   F_temp\tvalue= " << _value_F_temp 
+        cout << "   F_tm\tvalue = " << std::scientific << _value_F_temp 
              << "\terror = " << _error_F_temp 
              << "\trel_error = " << _error_F_temp/ _value_F_temp 
              << endl;
 
-        cout << "   rho\tvalue = " << _value_rho_atlas 
+        cout << "   rho\tvalue = " << std::scientific << _value_rho_atlas 
              << "\terror = " << _error_rho_atlas 
              << "\trel_error = " << _error_rho_atlas/_value_rho_atlas 
              << endl << endl;
+
+        cout << "+===================================================" << endl;
+        cout << " Compare different error estimations:" << endl;
+        // difference should indiate the non-linearity of the problem
+        for (int i = _flowCoefIndex_begin; i < _flowCoefIndex_end; i++) {
+            cout << "parameter: " << fitter.Config().ParSettings(i).Name() << endl;
+            cout << "\tHESSE error = " << result.ParError(i) << endl;
+            cout << "\tMinos error lower = " << result.LowerError(i) << ", upper = " << result.UpperError(i) << endl;
+        }
     }
 
     // construct stuffs for plotting
@@ -696,7 +739,9 @@ subResult NonFlowSubtractor::fourierFitLM (TH1* hist) {
         f_fourier->SetParameter(ihar, _cosx);
     }
     
-    hist->Fit("f_fourier", "0");
+    string option = "0Q";
+    if (m_debug) option = "0V";
+    hist->Fit("f_fourier", Form("%s",option.c_str()) );
 
     vector<float> vec_value;
     vector<float> vec_error;
