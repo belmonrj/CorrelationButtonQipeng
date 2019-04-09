@@ -455,7 +455,7 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
     float nsig = 0;
     for (int iNch=index_Nch_low; iNch<index_Nch_high+1; iNch++) {
         for (int ipt=index_pt_low; ipt<index_pt_high+1; ipt++) {
-            cout << iNch << "\t" << ipt << endl;
+            //cout << iNch << "\t" << ipt << endl;
 
             // example names
             //h_deta_dphi_same_Mq4_ptq2_Pq1	
@@ -465,10 +465,10 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
 	        TH2D* htemp_2 = (TH2D*)gDirectory->Get(Form("%sMq%d_ptq%d_Sq0_tq0_Pq%d",path_mix.c_str(),iNch, ipt, type));
 
             nsig += h2_nsig->GetBinContent(ipt+1, iNch+1);
-            cout << Form("%sMq%d_ptq%d_Pq%d",path_sig.c_str(),iNch, ipt, type) << endl;
-            cout << "\tnsig = " <<  h2_nsig->GetBinContent(ipt+1, iNch+1) << endl;
-            htemp_1->Print();
-            cout << "-------------" << endl;
+            //cout << Form("%sMq%d_ptq%d_Pq%d",path_sig.c_str(),iNch, ipt, type) << endl;
+            //cout << "\tnsig = " <<  h2_nsig->GetBinContent(ipt+1, iNch+1) << endl;
+            //htemp_1->Print();
+            //cout << "-------------" << endl;
 
 	        if (iNch==index_Nch_low && ipt==index_pt_low) {
 	            h1 = (TH2D*) htemp_1->Clone(Form("h1_Nch%d_%d_pt%d_pt%d", index_Nch_low, index_Nch_high, index_pt_low, index_pt_high));
