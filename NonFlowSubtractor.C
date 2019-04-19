@@ -1089,9 +1089,9 @@ bool NonFlowSubtractor :: plotAtlasHistSubHM (TCanvas* theCanvas) {
     m_h_ridge->GetYaxis()->SetRangeUser(Min_sub, Max_sub);
     m_h_ridge->SetXTitle("#Delta#it{#phi}");
     if (m_ridge_scaleFactor != 1.0) {
-        m_h_ridge->SetYTitle(Form("(#it{Y}(#Delta#it{#phi}) - #it{F}#it{Y}^{LM}(#Delta#it{#phi}))#times%.0f", m_ridge_scaleFactor));
+        m_h_ridge->SetYTitle(Form("(#it{Y}(#Delta#it{#phi}) - #it{G} - #it{F}#it{Y}^{LM}(#Delta#it{#phi}))#times%.0f", m_ridge_scaleFactor));
     } else {
-        m_h_ridge->SetYTitle(Form("#it{Y}(#Delta#it{#phi}) - #it{F}#it{Y}^{LM}(#Delta#it{#phi})"));
+        m_h_ridge->SetYTitle(Form("#it{Y}(#Delta#it{#phi}) - #it{G} - #it{F}#it{Y}^{LM}(#Delta#it{#phi})"));
     }
     m_h_ridge->GetYaxis()->SetNdivisions(506,kTRUE);
     m_h_ridge->GetYaxis()->SetLabelFont(43);
@@ -1140,7 +1140,7 @@ void NonFlowSubtractor :: plotAtlasHMLabel (TPad* thePad) {
     plotMarkerLineText(0.25, 0.88, 1.2, 1, 20, 1,1,"HM Data", 0.08, true);
     plotMarkerLineText(0.25, 0.78, 0,   2, 1, 2, 1,"Fit", 0.08);
     plotMarkerLineText(0.25, 0.68, 0, kSpring+4, 0, kSpring+4, 2,"#it{G} + #it{F}#it{Y}^{LM}", 0.08);
-    plotMarkerLineText(0.25, 0.58, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}",0.08);
+    plotMarkerLineText(0.25, 0.58, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}(0)",0.08);
 }
 
 
@@ -1196,8 +1196,8 @@ bool NonFlowSubtractor :: plotAtlasSubHM (TCanvas* theCanvas) {
     plotMarkerLineText(0.55, 0.85, 1.0,1, 20, 1,1,"HM Data", 0.05, true);
     plotMarkerLineText(0.55, 0.78, 0, 2, 1, 2, 1,"Fit", 0.05);
     plotMarkerLineText(0.55, 0.71, 0, kSpring+4, 0, kSpring+4, 2,"#it{G} + #it{F}#it{Y}^{LM}", 0.05);
-    plotMarkerLineText(              0.74,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}",0.05);
-    if (!m_fixC3) plotMarkerLineText(0.74,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge} + #it{F}#it{Y}^{LM}", 0.05);
+    plotMarkerLineText(              0.74,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}(0)",0.05);
+    if (!m_fixC3) plotMarkerLineText(0.74,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge} + #it{F}#it{Y}^{LM}(0)", 0.05);
 
     float _chi2 = 0;
     for (int i=1; i<h_pull->GetXaxis()->GetNbins()+1; i++){
@@ -1219,7 +1219,11 @@ bool NonFlowSubtractor :: plotAtlasSubHM (TCanvas* theCanvas) {
     //m_h_ridge->SetLineWidth(1);
     m_h_ridge->GetYaxis()->SetRangeUser(Min_sub, Max_sub);
     m_h_ridge->SetXTitle("#Delta#it{#phi}");
-    m_h_ridge->SetYTitle(Form("(#it{Y}(#Delta#it{#phi}) - #it{F}#it{Y}^{LM}(#Delta#it{#phi}))#times%.0f", m_ridge_scaleFactor));
+    if (m_ridge_scaleFactor != 1.0) {
+        m_h_ridge->SetYTitle(Form("(#it{Y}(#Delta#it{#phi}) - #it{F}#it{Y}^{LM}(#Delta#it{#phi}) - #it{G})#times%.0f", m_ridge_scaleFactor));
+    } else {
+        m_h_ridge->SetYTitle(Form("#it{Y}(#Delta#it{#phi}) - #it{F}#it{Y}^{LM}(#Delta#it{#phi}) - #it{G}"));
+    }
     m_h_ridge->GetYaxis()->SetNdivisions(406,kTRUE);
     m_h_ridge->GetYaxis()->SetLabelSize(0.06);
     m_h_ridge->GetYaxis()->SetTitleSize(0.06);
@@ -1246,9 +1250,9 @@ bool NonFlowSubtractor :: plotAtlasSubHM (TCanvas* theCanvas) {
         f_show_ridge3->Draw("same");
     }
     plotMarkerLineText(0.60, 0.85, 1.0,1, 20, 1,1,"Data", 0.05, true);
-    plotMarkerLineText(0.60, 0.78, 0, 2, 1, 2, 1,"#it{Y}^{ridge}", 0.05);
-    plotMarkerLineText(              0.74,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge}",0.05);
-    if (!m_fixC3) plotMarkerLineText(0.74,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge}", 0.05);
+    plotMarkerLineText(0.60, 0.78, 0, 2, 1, 2, 1,"#it{Y}^{ridge}-#it{G}", 0.05);
+    plotMarkerLineText(              0.77,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge}-#it{G}",0.05);
+    if (!m_fixC3) plotMarkerLineText(0.77,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge}-#it{G}", 0.05);
 
     pad1->cd();
 
@@ -1305,8 +1309,8 @@ bool NonFlowSubtractor :: plotAtlasHM (TCanvas* theCanvas) {
     plotMarkerLineText(0.55, 0.85, 1.2,1, 20, 1,1,"HM Data", 0.05, true);
     plotMarkerLineText(0.55, 0.78, 0, 2, 1, 2, 1,"Fit", 0.05);
     plotMarkerLineText(0.55, 0.71, 0, kSpring+4, 0, kSpring+4, 2,"#it{G} + #it{F}#it{Y}^{LM}", 0.05);
-    plotMarkerLineText(              0.74,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}",0.05);
-    if (!m_fixC3) plotMarkerLineText(0.74,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge} + #it{F}#it{Y}^{LM}", 0.05);
+    plotMarkerLineText(              0.74,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}(0)",0.05);
+    if (!m_fixC3) plotMarkerLineText(0.74,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge} + #it{F}#it{Y}^{LM}(0)", 0.05);
 
     float _chi2 = 0;
     for (int i=1; i<h_pull->GetXaxis()->GetNbins()+1; i++){
