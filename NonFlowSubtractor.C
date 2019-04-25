@@ -511,31 +511,31 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     m_h_ridge = (TH1F*) m_hist_HM->Clone("h_ridge");
     m_h_ridge->Reset();
     for (int i=1; i<m_hist_HM->GetXaxis()->GetNbins()+1; i++){
-        float _residual = m_hist_HM->GetBinContent(i) - f_show_periph->Eval(m_hist_HM->GetBinCenter(i));
+        float _residual = m_hist_HM->GetBinContent(i) - f_show_periph->Eval(m_hist_HM->GetBinCenter(i)) + result.Value(Npar - 1); // add back the pedestal
         _residual *= m_ridge_scaleFactor;
-        //float _residual_error = _residual * ( m_hist_HM->GetBinError(i) / m_hist_HM->GetBinContent(i) );
-        float _residual_error = m_hist_HM->GetBinError(i)*m_ridge_scaleFactor;
+        float _residual_error = _residual * ( m_hist_HM->GetBinError(i) / m_hist_HM->GetBinContent(i) ) * m_ridge_scaleFactor;
+        //float _residual_error = m_hist_HM->GetBinError(i)*m_ridge_scaleFactor;
         m_h_ridge->SetBinContent(i,_residual);
         m_h_ridge->SetBinError  (i,_residual_error);
     }
 
-    f_show_ridge2 = new TF1("f_show_ridge2","[0]*2*[1]*cos(2*x)", m_dphiRangeLow, m_dphiRangeHigh);
+    f_show_ridge2 = new TF1("f_show_ridge2","[0]*(1+2*[1]*cos(2*x))", m_dphiRangeLow, m_dphiRangeHigh);
     f_show_ridge2->SetParameter(0, result.Value(Npar - 1)*m_ridge_scaleFactor);
     f_show_ridge2->SetParameter(1, result.Value(getNHarLM()+2)); // c2
 
     if (!m_fixC3) {  
-        f_show_ridge3 = new TF1("f_show_ridge3","[0]*2*[1]*cos(3*x)", m_dphiRangeLow, m_dphiRangeHigh);
+        f_show_ridge3 = new TF1("f_show_ridge3","[0]*(1+2*[1]*cos(3*x))", m_dphiRangeLow, m_dphiRangeHigh);
         f_show_ridge3->SetParameter(0, result.Value(Npar - 1)*m_ridge_scaleFactor);
         f_show_ridge3->SetParameter(1, result.Value(getNHarLM()+3)); // c3
     }
 
     std::string _formula_ridge;
-    _formula_ridge = "[0]*2*([1]*cos(2*x)";
+    _formula_ridge = "[0]*(1+ 2*[1]*cos(2*x)";
     if (!m_fixC3) {
-        _formula_ridge += (" + [2]*cos(3*x)");
+        _formula_ridge += (" + 2*[2]*cos(3*x)");
     }
     if (!m_fixC4) {
-        _formula_ridge += (" + [3]*cos(4*x)");
+        _formula_ridge += (" + 2*[3]*cos(4*x)");
     }
     _formula_ridge += (")");
     f_show_ridge = new TF1("f_show_ridge", _formula_ridge.c_str(), m_dphiRangeLow, m_dphiRangeHigh);
@@ -543,9 +543,13 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     f_show_ridge->SetParameter(1, result.Value(getNHarLM()+2)); // c3
     if (!m_fixC3) {
         f_show_ridge->SetParameter(2, result.Value(getNHarLM()+3)); // c3
+    } else {
+        f_show_ridge->SetParameter(2, 0); // c3
     }
     if (!m_fixC4) {
         f_show_ridge->SetParameter(3, result.Value(getNHarLM()+4)); // c3
+    } else {
+        f_show_ridge->SetParameter(3, 0); // c3
     }
 
 
@@ -1213,16 +1217,20 @@ bool NonFlowSubtractor :: plotAtlasSubHM (TCanvas* theCanvas) {
     pad2->cd();
     int MaxBin_sub = m_h_ridge->GetMaximumBin();
     int MinBin_sub = m_h_ridge->GetMinimumBin();
-    double Max_sub = TMath::Max( fabs(m_h_ridge->GetBinContent(MaxBin_sub)), fabs(m_h_ridge->GetBinContent(MinBin_sub)) )*4.;
-    double Min_sub = -1*Max_sub;
+    double Max_sub = m_h_ridge->GetBinContent(MaxBin_sub);
+    double Min_sub = m_h_ridge->GetBinContent(MinBin_sub);
+
+    double sub_distance = Max_sub - Min_sub;
+
     m_h_ridge->SetMarkerSize(0.8);
     //m_h_ridge->SetLineWidth(1);
-    m_h_ridge->GetYaxis()->SetRangeUser(Min_sub, Max_sub);
+    m_h_ridge->GetYaxis()->SetRangeUser(Min_sub - sub_distance, Max_sub + 2.*sub_distance);
+
     m_h_ridge->SetXTitle("#Delta#it{#phi}");
     if (m_ridge_scaleFactor != 1.0) {
-        m_h_ridge->SetYTitle(Form("(#it{Y}(#Delta#it{#phi}) - #it{F}#it{Y}^{LM}(#Delta#it{#phi}) - #it{G})#times%.0f", m_ridge_scaleFactor));
+        m_h_ridge->SetYTitle(Form("(#it{Y}(#Delta#it{#phi}) - #it{F}#it{Y}^{LM}(#Delta#it{#phi}))#times%.0f", m_ridge_scaleFactor));
     } else {
-        m_h_ridge->SetYTitle(Form("#it{Y}(#Delta#it{#phi}) - #it{F}#it{Y}^{LM}(#Delta#it{#phi}) - #it{G}"));
+        m_h_ridge->SetYTitle(Form("#it{Y}(#Delta#it{#phi}) - #it{F}#it{Y}^{LM}(#Delta#it{#phi})"));
     }
     m_h_ridge->GetYaxis()->SetNdivisions(406,kTRUE);
     m_h_ridge->GetYaxis()->SetLabelSize(0.06);
@@ -1250,9 +1258,9 @@ bool NonFlowSubtractor :: plotAtlasSubHM (TCanvas* theCanvas) {
         f_show_ridge3->Draw("same");
     }
     plotMarkerLineText(0.60, 0.85, 1.0,1, 20, 1,1,"Data", 0.05, true);
-    plotMarkerLineText(0.60, 0.78, 0, 2, 1, 2, 1,"#it{Y}^{ridge}-#it{G}", 0.05);
-    plotMarkerLineText(              0.77,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge}-#it{G}",0.05);
-    if (!m_fixC3) plotMarkerLineText(0.77,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge}-#it{G}", 0.05);
+    plotMarkerLineText(0.60, 0.78, 0, 2, 1, 2, 1,"#it{Y}^{ridge}", 0.05);
+    plotMarkerLineText(              0.77,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge}",0.05);
+    if (!m_fixC3) plotMarkerLineText(0.77,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge}", 0.05);
 
     pad1->cd();
 
