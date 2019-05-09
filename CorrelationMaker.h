@@ -59,8 +59,8 @@ class CorrelationMaker {
 
     const FlowAnaConfig* getConfig () const { return m_anaConfig; }
 
-    void get1DSigHist() const {return m_h1_sig;}
-    void get1DMixHist() const {return m_h1_mix;}
+    TH1* get1DSigHist() const {return m_h1_sig;}
+    TH1* get1DMixHist() const {return m_h1_mix;}
 
     void generateHist_bkgSub();
 
@@ -381,6 +381,20 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
     hphi->Rebin(m_rebin);
     hphi->Scale(1./m_rebin);
     hphi->SetName(Form("h_pty_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.0fto%.0f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+
+    if (m_h1_sig) {
+        m_h1_sig->Rebin(m_rebin);
+        m_h1_sig->Scale(1./m_rebin);
+        m_h1_sig->Scale(1./m_h1_mix->Integral());
+        m_h1_sig->SetName(Form("h_sig_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.0fto%.0f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+    }
+    
+    if (m_h1_mix){
+        m_h1_mix->Rebin(m_rebin);
+        m_h1_mix->Scale(1./m_rebin);
+        m_h1_mix->Scale(1./m_h1_mix->Integral());
+        m_h1_mix->SetName(Form("h_mix_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.0fto%.0f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+    }
 
     return hphi;
 }
@@ -711,7 +725,21 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
 
     hphi->Rebin(m_rebin);
     hphi->Scale(1./m_rebin);
-    hphi->SetName(Form("h_pty_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.0fto%.0f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+    hphi->SetName(Form("h_pty_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.1fto%.1f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+
+    if (m_h1_sig) {
+        m_h1_sig->Rebin(m_rebin);
+        //m_h1_sig->Scale(1./m_rebin);
+        m_h1_sig->Scale(1./m_h1_sig->Integral());
+        m_h1_sig->SetName(Form("h_sig_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.1fto%.1f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+    }
+    
+    if (m_h1_mix){
+        m_h1_mix->Rebin(m_rebin);
+        //m_h1_mix->Scale(1./m_rebin);
+        m_h1_mix->Scale(1./m_h1_mix->Integral());
+        m_h1_mix->SetName(Form("h_mix_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.1fto%.1f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+    }
 
     return hphi;
 }

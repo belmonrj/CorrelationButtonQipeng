@@ -1222,9 +1222,9 @@ bool NonFlowSubtractor :: plotAtlasSubHM (TCanvas* theCanvas) {
 
     plotMarkerLineText(0.55, 0.85, 1.0,1, 20, 1,1,"HM Data", 0.05, true);
     plotMarkerLineText(0.55, 0.78, 0, 2, 1, 2, 1,"Fit", 0.05);
-    plotMarkerLineText(0.55, 0.71, 0, kSpring+4, 0, kSpring+4, 2,"#it{G} + #it{F}#it{Y}^{LM}", 0.05);
-    plotMarkerLineText(              0.74,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}(0)",0.05);
-    if (!m_fixC3) plotMarkerLineText(0.74,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge} + #it{F}#it{Y}^{LM}(0)", 0.05);
+    plotMarkerLineText(0.55, 0.71, 0, kSpring+4, 0, kSpring+4, 2,"#it{G}+#it{F}#it{Y}^{LM}", 0.05);
+    plotMarkerLineText(              0.74,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge}+#it{F}#it{Y}^{LM}(0)",0.05);
+    if (!m_fixC3) plotMarkerLineText(0.74,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge}+#it{F}#it{Y}^{LM}(0)", 0.05);
 
     float _chi2 = 0;
     for (int i=1; i<h_pull->GetXaxis()->GetNbins()+1; i++){
@@ -1236,6 +1236,7 @@ bool NonFlowSubtractor :: plotAtlasSubHM (TCanvas* theCanvas) {
     }
     _chi2 /= h_pull->GetXaxis()->GetNbins()-3;
     m_h_pull = (TH1F*) h_pull->Clone("m_h_Pull");
+    plotText( 0.65, 0.22, 1, Form("#it{#chi}^{2}/ndof = %.2f",_chi2), 0.05);
 
     pad2->cd();
     int MaxBin_sub = m_h_ridge->GetMaximumBin();
