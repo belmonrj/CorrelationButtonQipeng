@@ -144,6 +144,11 @@ class NonFlowSubtractor {
     subResult fourierFitLM (TH1* hist);
 
 
+    TH1F* getPesudoHist_HM () {return m_hist_pesudo_HM;}
+    TH1F* getPesudoHist_LM () {return m_hist_pesudo_LM;}
+    void setPesudoVaryScale (float _scale) { m_pesudoVaryScale = _scale;}
+    float getPesudoVaryScale () {return m_pesudoVaryScale;}
+
 
     // Additional interface to configure the ATLAS Template fitting
     //---------------------------------
@@ -194,6 +199,11 @@ class NonFlowSubtractor {
     bool m_fixLM;
     bool m_plotBulkRef;
 
+    // members for toy fit model check
+    TH1F* m_hist_pesudo_HM;
+    TH1F* m_hist_pesudo_LM;
+    float m_pesudoVaryScale;
+
     float m_ridge_scaleFactor;
 
     TH1F* m_hist_LM;
@@ -238,6 +248,8 @@ NonFlowSubtractor :: NonFlowSubtractor() {
 
     m_plotBulkRef = false;
     m_ridge_scaleFactor = 1;
+
+    m_pesudoVaryScale = 0.0;
 
     m_dphiRangeLow = -0.5*TMath::Pi();
     m_dphiRangeHigh = 1.5*TMath::Pi();

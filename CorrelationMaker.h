@@ -10,12 +10,18 @@ class CorrelationMaker {
     int m_rebin;
 
     // index to show which trigger weight function to be applied;
-    // 0 for no trigger weight
-    // 1 for p+Pb HF analysis 
+    // 0 or > 4 for no trigger weight
+    // 1 for p+Pb hh correlation analysis 
+    // 2 for p+Pb Dh correlation analysis for L1_TE200
+    // 3 for p+Pb high run 313295
+    // 4 for p+Pb low run 313435
     // supports for other analysis to be added
     int m_weightCorrIndex; 
 
-    int m_statCorr;
+    // remove the double counted pair from the correlation function errors
+    // false means no error correction
+    // true means run error correction for correlation of asso_pt_low <= trig_pt <= asso_pt_high
+    bool m_runStatCorr;
 
     float m_etaBinInterval;
     float m_etaBoundary;
@@ -41,12 +47,8 @@ class CorrelationMaker {
     void setWeightIndex (int _n) { m_weightCorrIndex = _n; }
     int  getWeightIndex () { return m_weightCorrIndex; }
 
-    // remove the double counted pair from the correlation function errors
-    // 0 means no double counting at all, not correction to the errors
-    // 1 means full overlapping between the trigger and associated selections, so the error should be scaled by sqrt(2)
-    // 2 means partially overlapping, so the error should updated from sqrt(N_pair) to sqrt(N_pair - N_trig(N_trig-1))
-    void setStatCorrection (int _n) { m_statCorr = _n; }
-    int  getStatCorrection () { return m_statCorr; }
+    void setStatCorrection (bool _flag) { m_runStatCorr = _flag; }
+    bool getStatCorrection () { return m_runStatCorr; }
 
     void setRebin (int _n) { m_rebin = _n; }
     void setDebug (bool _debug = true) { m_debug = _debug; }
@@ -62,8 +64,10 @@ class CorrelationMaker {
 
     void generateHist_bkgSub();
 
-    float weight2016HFAna(int index_Nch);
+    float weight2016hhAna(int index_Nch);
     float weight2016DzeroAna(int index_Nch);
+    float weight295(int index_Nch);
+    float weight435(int index_Nch);
 
     // main function for generating single 1D correlation histogram
     // method1 -- ATLAS mixed event normalization, projection first, then take ratio (default ATLAS method)
@@ -79,7 +83,7 @@ class CorrelationMaker {
     virtual float GetPtMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int type = 1);
     virtual float GetMultMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int type = 1);
 
-    // Additional dimensions
+    // Additional 3rd dimensions
     // for D meson, invariant mass
     // for muon, momentum imbalance
     // for UPC, gap
@@ -99,7 +103,7 @@ CorrelationMaker::CorrelationMaker() {
     m_debug = false;
     m_rebin = 1;
     m_weightCorrIndex = 0;
-    m_statCorr = 0;
+    m_runStatCorr = true;
 
     m_etaBinInterval = 0.1;
     m_etaBoundary = 5.0;
@@ -130,7 +134,7 @@ void CorrelationMaker::init() {
 
 
 
-float CorrelationMaker::weight2016HFAna(int index_Nch) {
+float CorrelationMaker::weight2016hhAna(int index_Nch) {
     // use 1./lumi for this analysis
     float _lumi = 1.;
     if (index_Nch<14) _lumi = 0.082;
@@ -148,6 +152,29 @@ float CorrelationMaker::weight2016DzeroAna(int index_Nch) {
     if (index_Nch >= 28) efficiency = 0.85; // hard-coded hatch for D zero analysis systemaitcs for L1_TE200 ineffiency
     return 1./efficiency;
 }
+
+
+float CorrelationMaker::weight295(int index_Nch) {
+    // luminosity for triggers used in run 313295 in p+Pb
+    // use 1./lumi for this analysis
+    float _lumi = 1.;
+    if (index_Nch<14) _lumi = 0.004155;
+    else if (index_Nch<20) _lumi = 0.064152;
+    else if (index_Nch<24) _lumi = 0.376292;
+    else _lumi = 2.719786;
+    return 1./_lumi;
+}
+
+
+float CorrelationMaker::weight435(int index_Nch) {
+    // luminosity for triggers used in run 313295 in p+Pb
+    // use 1./lumi for this analysis
+    float _lumi = 1.;
+    if (index_Nch<20) _lumi = 0.016328;
+    else _lumi = 0.262875;
+    return 1./_lumi;
+}
+
 
 
 // a little bit wired to have multiplicity cut as float instead of int
@@ -194,9 +221,29 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
 	        TH2* htemp_1 = (TH2*)gDirectory->Get(Form("%sNch%d_pt%d",path_sig.c_str(),iNch,ipt));
 	        TH2* htemp_2 = (TH2*)gDirectory->Get(Form("%sNch%d_pt%d",path_mix.c_str(),iNch,ipt));
 
+            // Error correction
+            // for double counting trig-asso pairs
+            if (m_runStatCorr) {
+                if (  m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  <= m_anaConfig->getAssoPtHigh()
+                   && m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) >= m_anaConfig->getAssoPtLow() ) {
+                    for (int xbin=1; xbin<htemp_1->GetNbinsX()+1; xbin++) {
+                        for (int ybin=1; ybin<htemp_1->GetNbinsY()+1; ybin++) {
+                            htemp_1->SetBinError(xbin, ybin, htemp_1->GetBinError(xbin,ybin)*sqrt(2));
+                            htemp_2->SetBinError(xbin, ybin, htemp_2->GetBinError(xbin,ybin)*sqrt(2));
+                        }
+                    }
+                }
+            }
+
             float _weight = 1.;
             if (getWeightIndex() == 1) {
-                _weight = weight2016HFAna(iNch);
+                _weight = weight2016hhAna(iNch);
+            } else if (getWeightIndex() == 2) {
+                _weight = weight2016DzeroAna(iNch);
+            } else if (getWeightIndex() == 3) {
+                _weight = weight295(iNch);
+            } else if (getWeightIndex() == 4) {
+                _weight = weight435(iNch);
             }
             // to be extend to support other analysis
             htemp_1->Scale(_weight);
@@ -478,6 +525,20 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
 	        TH2D* htemp_1 = (TH2D*)gDirectory->Get(Form("%sMq%d_ptq%d_Pq%d",path_sig.c_str(),iNch, ipt, type));
 	        TH2D* htemp_2 = (TH2D*)gDirectory->Get(Form("%sMq%d_ptq%d_Sq0_tq0_Pq%d",path_mix.c_str(),iNch, ipt, type));
 
+            // Error correction
+            // for double counting trig-asso pairs
+            if (m_runStatCorr) {
+                if (  m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  <= m_anaConfig->getAssoPtHigh()
+                   && m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) >= m_anaConfig->getAssoPtLow() ) {
+                    for (int xbin=1; xbin<htemp_1->GetNbinsX()+1; xbin++) {
+                        for (int ybin=1; ybin<htemp_1->GetNbinsY()+1; ybin++) {
+                            htemp_1->SetBinError(xbin, ybin, htemp_1->GetBinError(xbin,ybin)*sqrt(2));
+                            htemp_2->SetBinError(xbin, ybin, htemp_2->GetBinError(xbin,ybin)*sqrt(2));
+                        }
+                    }
+                }
+            }
+
             nsig += h2_nsig->GetBinContent(ipt+1, iNch+1);
             //cout << Form("%sMq%d_ptq%d_Pq%d",path_sig.c_str(),iNch, ipt, type) << endl;
             //cout << "\tnsig = " <<  h2_nsig->GetBinContent(ipt+1, iNch+1) << endl;
@@ -697,6 +758,20 @@ TH2* CorrelationMaker::Make2DCorrUpc(float _pt_low, float _pt_high, float _Nch_l
 	        TH2* htemp_1 = (TH2*)gDirectory->Get(Form("%sMq%d_ptq%d_Pq1",path_sig.c_str(),iNch,ipt));
 	        TH2* htemp_2 = (TH2*)gDirectory->Get(Form("%sMq%d_ptq%d_Sq0_tq0_Pq1",path_mix.c_str(),iNch,ipt));
 
+            // Error correction
+            // for double counting trig-asso pairs
+            if (m_runStatCorr) {
+                if (  m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  <= m_anaConfig->getAssoPtHigh()
+                   && m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) >= m_anaConfig->getAssoPtLow() ) {
+                    for (int xbin=1; xbin<htemp_1->GetNbinsX()+1; xbin++) {
+                        for (int ybin=1; ybin<htemp_1->GetNbinsY()+1; ybin++) {
+                            htemp_1->SetBinError(xbin, ybin, htemp_1->GetBinError(xbin,ybin)*sqrt(2));
+                            htemp_2->SetBinError(xbin, ybin, htemp_2->GetBinError(xbin,ybin)*sqrt(2));
+                        }
+                    }
+                }
+            }
+
             htemp_2->Scale(htemp_1->Integral()/htemp_2->Integral());
 
             nsig += h2_nsig->GetBinContent(ipt+1, iNch+1);
@@ -826,9 +901,29 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
 	            TH2* htemp_1 = (TH2*)gDirectory->Get(Form("%sNch%d_pt%d_%s%d",path_sig.c_str(),iNch,ipt, m_anaConfig->getThirdDimensionName().c_str(), iadd));
 	            TH2* htemp_2 = (TH2*)gDirectory->Get(Form("%sNch%d_pt%d_%s%d",path_mix.c_str(),iNch,ipt, m_anaConfig->getThirdDimensionName().c_str(), iadd));
 
+                // Error correction
+                // for double counting trig-asso pairs
+                if (m_runStatCorr) {
+                    if (  m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  <= m_anaConfig->getAssoPtHigh()
+                       && m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) >= m_anaConfig->getAssoPtLow() ) {
+                        for (int xbin=1; xbin<htemp_1->GetNbinsX()+1; xbin++) {
+                            for (int ybin=1; ybin<htemp_1->GetNbinsY()+1; ybin++) {
+                                htemp_1->SetBinError(xbin, ybin, htemp_1->GetBinError(xbin,ybin)*sqrt(2));
+                                htemp_2->SetBinError(xbin, ybin, htemp_2->GetBinError(xbin,ybin)*sqrt(2));
+                            }
+                        }
+                    }
+                }
+
                 float _weight = 1.;
                 if (getWeightIndex() == 1) {
-                    _weight = weight2016HFAna(iNch);
+                    _weight = weight2016hhAna(iNch);
+                } else if (getWeightIndex() == 2) {
+                    _weight = weight2016DzeroAna(iNch);
+                } else if (getWeightIndex() == 3) {
+                    _weight = weight295(iNch);
+                } else if (getWeightIndex() == 4) {
+                    _weight = weight435(iNch);
                 }
                 // to be extend to support other analysis
 

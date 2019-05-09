@@ -553,6 +553,29 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     }
 
 
+    // for parameterization bias test
+    // current only bias on v22 has been tested
+    if (m_pesudoVaryScale != 0) {
+        TF1* f_pesudo_HM = new TF1("f_pesudo_HM", templ, m_dphiRangeLow, m_dphiRangeHigh, Npar);
+
+        for (int ipar = 0; ipar<f_HM->GetNpar(); ipar++) {
+            float _value = f_HM->GetParameter(ipar);
+            float _error = f_HM->GetParError(ipar);
+            f_pesudo_HM->SetParameter(ipar, _value);
+            f_pesudo_HM->SetParError (ipar, _error);
+
+            if (ipar == Npar_LM+1) f_pesudo_HM->SetParameter(ipar, _value*(1.+m_pesudoVaryScale));
+        }
+        f_pesudo_HM->Update();
+        m_hist_pesudo_HM = (TH1F*) hist_HM->Clone("m_hist_pesudo_HM");
+        m_hist_pesudo_LM = (TH1F*) hist_LM->Clone("m_hist_pesudo_LM");
+
+        for (int ibin=1; ibin < m_hist_pesudo_HM->GetNbinsX()+1; ibin++) {
+            float _binCenter = m_hist_pesudo_HM->GetXaxis()->GetBinCenter(ibin);
+            m_hist_pesudo_HM->SetBinContent(ibin, f_pesudo_HM->Eval(_binCenter));
+        }
+        delete f_pesudo_HM;
+    }
 
 
     return theResult;
