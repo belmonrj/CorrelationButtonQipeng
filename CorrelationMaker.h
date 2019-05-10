@@ -9,6 +9,10 @@ class CorrelationMaker {
     bool m_debug;
     int m_rebin;
 
+    // Depth of the mixing pool
+    // default is 5;
+    int m_mixDepth;
+
     // index to show which trigger weight function to be applied;
     // 0 or > 4 for no trigger weight
     // 1 for p+Pb hh correlation analysis 
@@ -77,20 +81,18 @@ class CorrelationMaker {
     // method5 -- no mixed event correction  (for systematic study of mixing)
     // by default doing analaysis in pt and Nch
     virtual TH1* MakeCorr(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method = 1);
+    //virtual TH2* Make2DCorr(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high);
+    // Additional 3rd dimensions
+    // for D meson, invariant mass
+    // for muon, momentum imbalance
+    virtual TH1* MakeCorr(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, float _add_low, float _add_high, int method = 1);
 
     // for UPC analysis
     virtual TH1*  MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method = 1, int type = 1);
     virtual float GetPtMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int type = 1);
     virtual float GetMultMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int type = 1);
 
-    // Additional 3rd dimensions
-    // for D meson, invariant mass
-    // for muon, momentum imbalance
-    // for UPC, gap
-    virtual TH1* MakeCorr(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, float _add_low, float _add_high, int method = 1);
-
     virtual TH2* Make2DCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method = 1);
-    //virtual TH2* Make2DCorr(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high);
     //virtual TH2* Make2DCorr(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, float _add_low, float _add_high);
     
     void Plot2DCorrelation(TH2* h1, TCanvas* c1);
@@ -107,6 +109,9 @@ CorrelationMaker::CorrelationMaker() {
 
     m_etaBinInterval = 0.1;
     m_etaBoundary = 5.0;
+
+
+    m_mixDepth = 5;
 
     m_h1_sig = 0;
     m_h1_mix = 0;
@@ -194,6 +199,12 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
     TH2* h2_nsig    = (TH2*)gDirectory->Get(m_anaConfig->getTrigYieldHistName().c_str());
     TH2* h2_nsigMix = (TH2*)gDirectory->Get(m_anaConfig->getMixTrigYieldHistName().c_str());
 
+    // Hard-coded accesse to raw 1D multiplicity distributions to support Erorr correction for hh correlation
+    // BE CAREFULL HERE
+    TH1F* h1_raw_Nch = 0;
+    h1_raw_Nch = (TH1F*)gDirectory->Get("h_Nch_selected_raw");
+    if (!h1_raw_Nch) cout << "Cannot retrieve 1D multiplicity hitogram for PTY calculation" << endl;
+
     if (!h2_nsig) cout << "Cannot retrieve yield hitogram for PTY calculation" << endl;
     if (!h2_nsigMix) cout << "Cannot retrieve mix-event yield hitogram for PTY calculation" << endl;
     if (m_debug) {h2_nsig->Print(); h2_nsigMix->Print();}
@@ -224,12 +235,41 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
             // Error correction
             // for double counting trig-asso pairs
             if (m_runStatCorr) {
+                // only apply the correction in case the trigger particle collection is a subset of the associate particle collection
                 if (  m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  <= m_anaConfig->getAssoPtHigh()
                    && m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) >= m_anaConfig->getAssoPtLow() ) {
+
+                    
+                    // nEvent is calculated from raw 1D multiplicity distribution
+                    // only consequence would be slightly underestimation <Ntrig> due to too large Nevt including events without particle passing trigger selection
+                    // still better than no error correction
+                    int _Nch_bin_low  = h1_raw_Nch->FindBin(_Nch_low);
+                    int _Nch_bin_high = h1_raw_Nch->FindBin(_Nch_high);
+                    float _nEvt = h1_raw_Nch->Integral(_Nch_bin_low, _Nch_bin_high);
+
+                    // error correction for double counting based on effective sample size
+                    float _Neff_trig = pow(h2_nsig->GetBinContent(ipt+1, iNch+1)/h2_nsig->GetBinError(ipt+1, iNch+1), 2)/_nEvt;
+                    float _Neff_pair_same  = htemp_1->GetEffectiveEntries()/_nEvt;
+                    float _Ncorr_pair_same = _Neff_pair_same - 0.5*_Neff_trig*(_Neff_trig-1);
+                    float _errorScale_same = sqrt(_Neff_pair_same/_Ncorr_pair_same);
+                    if (m_debug) {
+                        cout << "Running the error correction: " << endl; 
+                        cout << "-----------------------------------------" << endl; 
+                        cout << "Raw effective size: " << _Neff_pair_same 
+                             << ", trigger particle effective size: " << _Neff_trig
+                             << ", Corrected effective size: " << _Ncorr_pair_same
+                             << ", Error correction scale " << _errorScale_same << endl;
+                    } 
+                    // mixed event error corrections
+                    // not sure how useful they are
+                    float _Neff_pair_mix  = htemp_1->GetEffectiveEntries()/_nEvt;
+                    float _Ncorr_pair_mix = _Neff_pair_mix - 0.5*m_mixDepth*_Neff_trig*(_Neff_trig-1);
+                    float _errorScale_mix = sqrt(_Neff_pair_mix/_Ncorr_pair_mix);
+
                     for (int xbin=1; xbin<htemp_1->GetNbinsX()+1; xbin++) {
                         for (int ybin=1; ybin<htemp_1->GetNbinsY()+1; ybin++) {
-                            htemp_1->SetBinError(xbin, ybin, htemp_1->GetBinError(xbin,ybin)*sqrt(2));
-                            htemp_2->SetBinError(xbin, ybin, htemp_2->GetBinError(xbin,ybin)*sqrt(2));
+                            htemp_1->SetBinError(xbin, ybin, htemp_1->GetBinError(xbin,ybin)*_errorScale_same);
+                            htemp_2->SetBinError(xbin, ybin, htemp_2->GetBinError(xbin,ybin)*_errorScale_mix );
                         }
                     }
                 }
@@ -544,10 +584,33 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
             if (m_runStatCorr) {
                 if (  m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  <= m_anaConfig->getAssoPtHigh()
                    && m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) >= m_anaConfig->getAssoPtLow() ) {
+
+                    
+                    float _nEvt = 1; // to be updated when nEvt is available from Blair
+
+                    // error correction for double counting based on effective sample size
+                    float _Neff_trig = pow(h2_nsig->GetBinContent(ipt+1, iNch+1)/h2_nsig->GetBinError(ipt+1, iNch+1), 2)/_nEvt;
+                    //float _Neff_trig = h2_nsig->GetBinContent(ipt+1, iNch+1)/_nEvt;
+                    float _Neff_pair_same  = htemp_1->GetEffectiveEntries()/_nEvt;
+                    float _Ncorr_pair_same = _Neff_pair_same - 0.5*_Neff_trig*(_Neff_trig-1);
+                    float _errorScale_same = sqrt(_Neff_pair_same/_Ncorr_pair_same);
+                    if (m_debug) {
+                        cout << "Running the error correction: " << endl; 
+                        cout << "Raw effective size: " << _Neff_pair_same 
+                             << ", trigger particle effective size: " << _Neff_trig
+                             << ", Corrected effective size: " << _Ncorr_pair_same
+                             << ", Error correction scale " << _errorScale_same << endl;
+                    } 
+                    // mixed event error corrections
+                    // not sure how useful they are
+                    float _Neff_pair_mix  = htemp_1->GetEffectiveEntries()/_nEvt;
+                    float _Ncorr_pair_mix = _Neff_pair_mix - 0.5*m_mixDepth*_Neff_trig*(_Neff_trig-1);
+                    float _errorScale_mix = sqrt(_Neff_pair_mix/_Ncorr_pair_mix);
+
                     for (int xbin=1; xbin<htemp_1->GetNbinsX()+1; xbin++) {
                         for (int ybin=1; ybin<htemp_1->GetNbinsY()+1; ybin++) {
-                            htemp_1->SetBinError(xbin, ybin, htemp_1->GetBinError(xbin,ybin)*sqrt(2));
-                            htemp_2->SetBinError(xbin, ybin, htemp_2->GetBinError(xbin,ybin)*sqrt(2));
+                            htemp_1->SetBinError(xbin, ybin, htemp_1->GetBinError(xbin,ybin)*_errorScale_same);
+                            htemp_2->SetBinError(xbin, ybin, htemp_2->GetBinError(xbin,ybin)*_errorScale_mix );
                         }
                     }
                 }
@@ -786,19 +849,6 @@ TH2* CorrelationMaker::Make2DCorrUpc(float _pt_low, float _pt_high, float _Nch_l
 	        TH2* htemp_1 = (TH2*)gDirectory->Get(Form("%sMq%d_ptq%d_Pq1",path_sig.c_str(),iNch,ipt));
 	        TH2* htemp_2 = (TH2*)gDirectory->Get(Form("%sMq%d_ptq%d_Sq0_tq0_Pq1",path_mix.c_str(),iNch,ipt));
 
-            // Error correction
-            // for double counting trig-asso pairs
-            if (m_runStatCorr) {
-                if (  m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  <= m_anaConfig->getAssoPtHigh()
-                   && m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) >= m_anaConfig->getAssoPtLow() ) {
-                    for (int xbin=1; xbin<htemp_1->GetNbinsX()+1; xbin++) {
-                        for (int ybin=1; ybin<htemp_1->GetNbinsY()+1; ybin++) {
-                            htemp_1->SetBinError(xbin, ybin, htemp_1->GetBinError(xbin,ybin)*sqrt(2));
-                            htemp_2->SetBinError(xbin, ybin, htemp_2->GetBinError(xbin,ybin)*sqrt(2));
-                        }
-                    }
-                }
-            }
 
             htemp_2->Scale(htemp_1->Integral()/htemp_2->Integral());
 
@@ -929,19 +979,20 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
 	            TH2* htemp_1 = (TH2*)gDirectory->Get(Form("%sNch%d_pt%d_%s%d",path_sig.c_str(),iNch,ipt, m_anaConfig->getThirdDimensionName().c_str(), iadd));
 	            TH2* htemp_2 = (TH2*)gDirectory->Get(Form("%sNch%d_pt%d_%s%d",path_mix.c_str(),iNch,ipt, m_anaConfig->getThirdDimensionName().c_str(), iadd));
 
+                // error correction for double counting based on effective sample size
+                float _Neff_trig = pow(h2_nsig->GetBinContent(ipt+1, iNch+1, iadd+1)/h2_nsig->GetBinError(ipt+1, iNch+1, iadd+1), 2); 
+                float _Neff_pair_same  = htemp_1->GetEffectiveEntries();
+                float _Ncorr_pair_same = _Neff_pair_same - 0.5*_Neff_trig*(_Neff_trig-1);
+                float _errorScale_same = sqrt(_Neff_pair_same/_Ncorr_pair_same);
+                // mixed event error correction
+                // not sure how useful they are
+                float _Neff_pair_mix  = htemp_1->GetEffectiveEntries();
+                float _Ncorr_pair_mix = _Neff_pair_mix - 0.5*m_mixDepth*_Neff_trig*(_Neff_trig-1);
+                float _errorScale_mix = sqrt(_Neff_pair_mix/_Ncorr_pair_mix);
+
                 // Error correction
-                // for double counting trig-asso pairs
-                if (m_runStatCorr) {
-                    if (  m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  <= m_anaConfig->getAssoPtHigh()
-                       && m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) >= m_anaConfig->getAssoPtLow() ) {
-                        for (int xbin=1; xbin<htemp_1->GetNbinsX()+1; xbin++) {
-                            for (int ybin=1; ybin<htemp_1->GetNbinsY()+1; ybin++) {
-                                htemp_1->SetBinError(xbin, ybin, htemp_1->GetBinError(xbin,ybin)*sqrt(2));
-                                htemp_2->SetBinError(xbin, ybin, htemp_2->GetBinError(xbin,ybin)*sqrt(2));
-                            }
-                        }
-                    }
-                }
+                // no need for D-h, psi-h correlation study
+                // not implemented for here
 
                 float _weight = 1.;
                 if (getWeightIndex() == 1) {

@@ -1234,7 +1234,7 @@ bool NonFlowSubtractor :: plotAtlasSubHM (TCanvas* theCanvas) {
         h_pull->SetBinError(i,m_hist_HM->GetBinError(i)/m_hist_HM->GetBinError(i));
         _chi2 += pow(_residual/m_hist_HM->GetBinError(i),2);
     }
-    _chi2 /= h_pull->GetXaxis()->GetNbins()-3;
+    _chi2 /= h_pull->GetXaxis()->GetNbins()- (getNHar() + 1);
     m_h_pull = (TH1F*) h_pull->Clone("m_h_Pull");
     plotText( 0.65, 0.22, 1, Form("#it{#chi}^{2}/ndof = %.2f",_chi2), 0.05);
 
@@ -1352,7 +1352,7 @@ bool NonFlowSubtractor :: plotAtlasHM (TCanvas* theCanvas) {
         h_pull->SetBinError(i,m_hist_HM->GetBinError(i)/m_hist_HM->GetBinError(i));
         _chi2 += pow(_residual/m_hist_HM->GetBinError(i),2);
     }
-    _chi2 /= h_pull->GetXaxis()->GetNbins()-3;
+    _chi2 /= h_pull->GetXaxis()->GetNbins()- (getNHar() + 1);
     m_h_pull = (TH1F*) h_pull->Clone("m_h_Pull");
 
     pad2->cd();
