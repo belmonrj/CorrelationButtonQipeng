@@ -2,6 +2,10 @@
 
 
 subResult NonFlowSubtractor :: templateHistFit(TH1* hist_LM, TH1* hist_HM) {
+
+    // temporary solution of incorporating errors from the LM
+    subResult _errorHelper = templateFit(hist_LM, hist_HM);
+
     m_hist_LMtemp = (TH1F*)hist_LM->Clone("hist_LMtemp");
 
     f_HM = new TF1("f_HM", templ_hist, m_dphiRangeLow, m_dphiRangeHigh, getNHar()+2);
@@ -23,8 +27,10 @@ subResult NonFlowSubtractor :: templateHistFit(TH1* hist_LM, TH1* hist_HM) {
 
     for (int i=0; i<getNHar(); i++) {
         vec_value_sub.push_back(f_HM->GetParameter(i));
-        vec_error_sub.push_back(f_HM->GetParError(i));
-
+        vec_error_sub.push_back(_errorHelper.getCoeffSubError(i+1));
+        cout << "c" << i+1 << ": hist based fitted value. = " << f_HM->GetParameter(i) << ", func based fitted value = " << _errorHelper.getCoeffSubValue(i+1) << endl;
+        cout << "c" << i+1 << ": error without LM stat. = " << f_HM->GetParError(i) << ", error with LM stat = " << _errorHelper.getCoeffSubError(i+1) << endl;
+        cout << endl;
     }
     theResult.setCoeffSub(vec_value_sub, vec_error_sub);
 
@@ -95,6 +101,8 @@ subResult NonFlowSubtractor :: templateHistFit(TH1* hist_LM, TH1* hist_HM) {
     if (!m_fixC4) {
         f_show_ridge->SetParameter(3, f_HM->GetParameter(3)); // c4
     }
+
+     
 
     /*
     // calculate chi2 distribution vs. c2
