@@ -14,14 +14,14 @@ void testSimple() {
     // change the fitter configure before call init() here
     //subTool.setAtlasFixedC3();
     //subTool.setAtlasFixedC4();
-    subTool.setDebug();
+    //subTool.setDebug(); // Qipeng suggests to not use debug
     subTool.init();
 
     //--------------------------------------------------
     // ATLAS template fit
     //--------------------------------------------------
-    subResult theResult = subTool.templateFit(h_correlation_LM, h_correlation_HM, h_correlation_LM2);
-    //subResult theResult = subTool.templateFit(h_correlation_LM, h_correlation_HM);
+    //subResult theResult = subTool.templateFit(h_correlation_LM, h_correlation_HM, h_correlation_LM2); // this is for ATLAS improved method
+    subResult theResult = subTool.templateFit(h_correlation_LM, h_correlation_HM);
     //subResult theResult = subTool.templateHistFit(h_correlation_LM, h_correlation_HM);
 
     //--------------------------------------------------
@@ -39,7 +39,7 @@ void testSimple() {
     // Access the fitted results and plots
     //--------------------------------------------------
     cout << "v22 = " << theResult.getV22SubValue() << " +/- " << theResult.getV22SubError() << endl;
-    cout << "Improved v22 = " << theResult.getV22SubImpValue() << " +/- " << theResult.getV22SubImpError() << endl;
+    //cout << "Improved v22 = " << theResult.getV22SubImpValue() << " +/- " << theResult.getV22SubImpError() << endl; // 3 histos instead of 2, ATLAS improved method
 
     TCanvas* c1 = new TCanvas("c1","scaling",50,50, 600,700);
     //TCanvas* c1 = new TCanvas("c1","scaling",50,50, 600,600);

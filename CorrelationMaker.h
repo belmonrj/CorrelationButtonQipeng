@@ -988,7 +988,7 @@ void CorrelationMaker::Plot2DCorrelation(TH2* h1, TCanvas* c1) {
     h1->GetZaxis()->CenterTitle();
     h1->GetZaxis()->SetTitleOffset(1.20);
     h1->Draw("SURF1FB");
-    ATLASLabel(0.02,0.94,"Internal");
+    //ATLASLabel(0.02,0.94,"Internal");
     //myText(    0.02,0.89,1,"#it{p}+Pb #sqrt{#it{s}_{NN}} = 8.16 TeV");
     //myText(    0.02,0.83,1,"#it{h}-#it{h} Correlation");
     //myText(    0.02,0.12,1,"0.5 < #it{p}_{T}^{trig,asso} < 5 GeV");
