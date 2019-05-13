@@ -138,7 +138,10 @@ void testSimple(TH1D* h_correlation_LM, TH1D* h_correlation_HM, TH1D* h_correlat
     //--------------------------------------------------
     // Access the fitted results and plots
     //--------------------------------------------------
-    cout << "v22 = " << theResult.getV22SubValue() << " +/- " << theResult.getV22SubError() << endl;
+    //theResult.getV22RawValue()
+    //cout << "v22 = " << theResult.getV22RawValue() << " +/- " << theResult.getV22RawError() << endl;
+    cout << "v22 = " << theResult.getV22RawValue() << " +/- " << theResult.getV22RawError() << " and ";
+    cout << "v22sub = " << theResult.getV22SubValue() << " +/- " << theResult.getV22SubError() << endl;
     //cout << "Improved v22 = " << theResult.getV22SubImpValue() << " +/- " << theResult.getV22SubImpError() << endl; // 3 histos instead of 2, ATLAS improved method
 
     //TCanvas* c1 = new TCanvas("c1","scaling",50,50, 600,700);
