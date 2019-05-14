@@ -411,18 +411,20 @@ double NonFlowSubtractor::templ(double *x, double *par) {
 // F*f_periph + G^{HM}*f_ridge + (G^{HM} - F * G^{LM})
 double NonFlowSubtractor::seyoung_templ(double *x, double *par) {
     double xx = x[0];
-    double f = par[getNHar()+getNHarLM()+1]*f_periph(x, par)  //F
+    double f = par[getNHarLM()+getNHar()+1]*f_periph(x, par)  //F
              + par[getNHarLM()+getNHar()+2]*f_ridge(x, &par[getNHarLM()+1]) // G{HM}
-             + par[getNHarLM()+getNHar()+2] - par[getNHar()+getNHarLM()+1]*par[0];
+             //+ par[getNHarLM()+getNHar()+2] - par[getNHar()+getNHarLM()+1]*par[0];
+             - par[getNHar()+getNHarLM()+1]*par[0];
     return f;
 }
 
 
 
-// F*f_periph + (G^{HM} - F*G^{LM})*f_ridge
+// F*f_periph_zyam + (G^{HM} - F*G^{LM})*f_ridge
 double NonFlowSubtractor::templ_zyam(double *x, double *par) {
     double xx = x[0];
-    double f = par[getNHar()+getNHarLM()+1]*f_periph_zyam(x, par) + par[getNHarLM()+getNHar()+2]*f_ridge(x, &par[getNHarLM()+1]);
+    double f = par[getNHarLM()+getNHar()+1]*f_periph_zyam(x, par)  //F
+             + par[getNHarLM()+getNHar()+2]*f_ridge(x, &par[getNHarLM()+1]); // G{temp} = G{HM}
     return f;
 }
 
