@@ -2,6 +2,392 @@
 
 
 subResult NonFlowSubtractor :: templateHistFit(TH1* hist_LM, TH1* hist_HM) {
+
+    const int Npar(getNHar() + 2);
+
+    const int _flowCoefIndex_begin = 0;
+    const int _flowCoefIndex_end = getNHar()-1;
+
+    f_HM = new TF1("f_HM", templ_hist, m_dphiRangeLow, m_dphiRangeHigh, Npar, 1);
+
+    vector <double> parInitValues;
+    parInitValues.clear();
+    for (int i=0; i<Npar; i++) { 
+        parInitValues.push_back(0);
+    }
+
+    //perform fourier fit first to get initial values
+    subResult _init_LM = fourierFitLM(hist_LM);
+    double _value_G_LM = _init_LM.getPedstalValue(); // parameter needed for one-step correction
+    double _error_G_LM = _init_LM.getPedstalError();
+
+    if (m_applyZYAM) {
+        if (m_debug) cout << "Apply ZYAM" << endl;
+        ZYAM(hist_LM);
+    }
+
+    m_hist_LMtemp = (TH1F*)hist_LM->Clone("hist_LMtemp");
+    m_hist_HMtemp = (TH1F*)hist_HM->Clone("hist_HMtemp");
+
+    subResult theResult;
+    // fit HM using LM paramerization
+    // be carefull to the index
+    subResult _init_HM = fourierFitLM(hist_HM);
+    vector<float> vec_value_raw;
+    vector<float> vec_error_raw;
+    for (int i=0; i<getNHar(); i++) { 
+        vec_value_raw.push_back(_init_HM.getCoeffRawValue(i+1));
+        vec_error_raw.push_back(_init_HM.getCoeffRawError(i+1));
+        parInitValues.at(i) = _init_HM.getCoeffRawValue(i+1)/2.;
+    }
+    theResult.setCoeffRaw(vec_value_raw, vec_error_raw);
+    double _value_G_HM = _init_HM.getPedstalValue();
+    double _error_G_HM = _init_HM.getPedstalError();
+    // arbitrary guesses
+    parInitValues.at(Npar-2) = 0.5;
+    parInitValues.at(Npar-1) = 0.2;
+
+
+    ROOT::Fit::DataOptions opt;
+    ROOT::Fit::DataRange range;
+    range.SetRange(m_dphiRangeLow,m_dphiRangeHigh);
+    ROOT::Fit::BinData data_HM(opt,range);
+    ROOT::Fit::FillData(data_HM, hist_HM);
+
+    ROOT::Fit::Fitter fitter;
+    fitter.Config().SetParamsSettings(Npar, &parInitValues.at(0));
+    fitter.Config().MinimizerOptions().SetPrintLevel(m_fitPrintLevel);
+    fitter.Config().SetMinimizer("Minuit2","Migrad");
+
+    vector<unsigned int> minosErr_index;
+    // only run minos errors for flow coefficents
+    for (int i = _flowCoefIndex_begin; i < _flowCoefIndex_end+1; i++) {
+        minosErr_index.push_back(i);
+    }
+    fitter.Config().SetMinosErrors( minosErr_index);
+
+    if (m_fixC1) {
+        fitter.Config().ParSettings(0).SetValue(0);
+        fitter.Config().ParSettings(0).Fix();
+    }
+    if (m_fixC3 && getNHar() > 2) {
+        fitter.Config().ParSettings(2).SetValue(0);
+        fitter.Config().ParSettings(2).Fix();
+    }
+    if (m_fixC4 && getNHar() > 3) {
+        fitter.Config().ParSettings(3).SetValue(0);
+        fitter.Config().ParSettings(3).Fix();
+    }
+
+    for (int ipar = _flowCoefIndex_begin; ipar < _flowCoefIndex_end+1; ipar++) {
+        fitter.Config().ParSettings(ipar).SetName(Form("c%d",ipar+1));
+        f_HM->SetParName(ipar, Form("c%d",ipar+1));
+    }
+    fitter.Config().ParSettings(getNHar()).SetName(Form("F"));
+    fitter.Config().ParSettings(getNHar()+1).SetName(Form("G"));
+    f_HM->SetParName(getNHar(), Form("F"));
+    f_HM->SetParName(getNHar()+1, Form("G"));
+
+    if (m_debug) {
+        cout << " ===================================================" << endl;
+        cout << " Running ATLAS template fitting with the following initial values: " << endl;
+        for (int ipar = 0; ipar < fitter.Config().NPar(); ipar++) {
+            cout << "   parameter " << ipar << ":\t\tname = " << fitter.Config().ParSettings(ipar).Name().c_str() << ",\t\tvalue = " << fitter.Config().ParSettings(ipar).Value() << endl;
+        }
+        cout << endl;
+    }
+
+    double chi2;
+    int npar = Npar;
+    hist_fcn(npar, 0, chi2, f_HM->GetParameters(), 0);
+
+    fitter.SetFCN(&hist_fcn, Npar, 0, data_HM.Size(), true);
+    fitter.FitFCN(&hist_fcn, Npar, 0, data_HM.Size(), true);
+    ROOT::Fit::FitResult result = fitter.Result();
+
+    for (int ipar = 0; ipar < fitter.Config().NPar(); ipar++) {
+        f_HM->SetParameter(ipar, result.Value(ipar));
+        f_HM->SetParError (ipar, result.ParError(ipar));
+    } 
+
+    if (m_debug) {
+        cout << endl;
+        cout << "****************************************" << endl;
+        cout << "Fit results: " << endl;
+        result.Print(std::cout);
+        cout << endl;
+        cout << "+===================================================" << endl;
+        cout << "CovMatrix after fit: " << endl;
+        result.PrintCovMatrix(std::cout);
+        cout << endl;
+    }
+
+    m_hist_HM = (TH1F*)hist_HM->Clone("__hist_HM");
+
+    double _value_F_temp = result.Value   (Npar-2);
+    double _error_F_temp = result.ParError(Npar-2);
+
+    double _value_rho_atlas = (_value_G_LM*_value_F_temp)/_value_G_HM;
+
+    // Ignore the correlations between G_HM/G_LM (from Fourier fit) and F_temp
+    // It's dominated by contribution from F_temp any way
+    double _error_rho_atlas = _value_rho_atlas*sqrt(pow(_error_G_LM/_value_G_LM, 2)
+                                                  + pow(_error_G_HM/_value_G_HM, 2)
+                                                  + pow(_error_F_temp/_value_F_temp,2));
+
+    theResult.setNHar(getNHar());
+    theResult.setChi2(result.Chi2() / result.Ndf());
+    theResult.setPedstalValue (_value_G_HM);
+    theResult.setPedstalError (_error_G_HM);
+    theResult.setRhoValue (_value_rho_atlas);
+    theResult.setRhoError (_error_rho_atlas);
+
+    vector<float> vec_value_sub;
+    vector<float> vec_error_sub;
+    vector<float> vec_correlation;
+    vector<float> vec_minos_lower;
+    vector<float> vec_minos_upper;
+    for (int ihar=0; ihar<getNHar(); ihar++){
+        vec_value_sub.push_back(result.Value   (ihar) );
+        vec_error_sub.push_back(result.ParError(ihar) );
+        // F-coefficient correlation is used for rho-coefficient correlation
+        // used for improved fit error calculation
+        vec_correlation.push_back(result.Correlation(Npar-2, ihar)*(_value_G_LM/_value_G_HM) );
+
+        vec_minos_lower.push_back(result.LowerError(ihar));
+        vec_minos_upper.push_back(result.UpperError(ihar));
+    }
+
+    theResult.setCoeffSub(vec_value_sub, vec_error_sub);
+    theResult.setRhoCorrelation(vec_correlation);
+    theResult.setCoeffSubMinos(vec_minos_lower, vec_minos_upper);
+
+    // construct stuffs for plotting
+    f_show_periph = new TF1("f_show_periph", f_periph_hist, m_dphiRangeLow, m_dphiRangeHigh, 2);
+    f_show_periph->SetParameter(0, f_HM->GetParameter(getNHar()));
+    f_show_periph->SetParameter(1, f_HM->GetParameter(getNHar()+1));
+
+    f_show_flow2 = new TF1("f_show_flow2","[0] + 2*[1]*[2]*cos(2*x)", m_dphiRangeLow, m_dphiRangeHigh);
+    f_show_flow2->SetParameter(0, f_show_periph->Eval(0));
+    f_show_flow2->SetParameter(1, f_HM->GetParameter(getNHar()+1) );
+    f_show_flow2->SetParameter(2, f_HM->GetParameter(1)); // c2
+
+    if (!m_fixC3) {  
+        f_show_flow3 = new TF1("f_show_flow3","[0] + [1]*2*[2]*cos(3*x)", m_dphiRangeLow, m_dphiRangeHigh);
+        f_show_flow3->SetParameter(0, f_show_periph->Eval(0));
+        f_show_flow3->SetParameter(1, f_HM->GetParameter(getNHar()+1));
+        f_show_flow3->SetParameter(2, f_HM->GetParameter(2)); // c3
+    }
+
+    h_show_periph = (TH1F*)hist_LM->Clone("h_show_periph");
+    h_show_HM     = (TH1F*)hist_LM->Clone("h_show_HM");
+    h_show_periph->Reset();
+    h_show_HM->Reset();
+
+    for (int ibin = 1; ibin < h_show_periph->GetNbinsX()+1; ibin++) {
+        float _xx = h_show_periph->GetXaxis()->GetBinCenter(ibin);
+        h_show_periph->SetBinContent(ibin, f_show_periph->Eval(_xx));
+        h_show_HM->SetBinContent(ibin, f_HM->Eval(_xx));
+    }
+
+    m_h_ridge = (TH1F*) m_hist_HM->Clone("h_ridge");
+    m_h_ridge->Reset();
+    for (int i=1; i<m_hist_HM->GetXaxis()->GetNbins()+1; i++){
+        float _residual = m_hist_HM->GetBinContent(i) - h_show_periph->GetBinContent(i);
+        _residual *= m_ridge_scaleFactor;
+        float _residual_error = m_hist_HM->GetBinError(i)*m_ridge_scaleFactor;
+        m_h_ridge->SetBinContent(i,_residual);
+        m_h_ridge->SetBinError  (i,_residual_error);
+    }
+
+    f_show_ridge2 = new TF1("f_show_ridge2","[0]*2*[1]*cos(2*x)", m_dphiRangeLow, m_dphiRangeHigh);
+    f_show_ridge2->SetParameter(0, f_HM->GetParameter(getNHar()+1)*m_ridge_scaleFactor);
+    f_show_ridge2->SetParameter(1, f_HM->GetParameter(1)); // c2
+
+    if (!m_fixC3) {  
+        f_show_ridge3 = new TF1("f_show_ridge3","[0]*2*[1]*cos(3*x)", m_dphiRangeLow, m_dphiRangeHigh);
+        f_show_ridge3->SetParameter(0, f_HM->GetParameter(getNHar()+1)*m_ridge_scaleFactor);
+        f_show_ridge3->SetParameter(1, f_HM->GetParameter(2)); // c3
+    }
+
+    std::string _formula_ridge;
+    _formula_ridge = "[0]*2*([1]*cos(2*x)";
+    if (!m_fixC3) {
+        _formula_ridge += (" + [2]*cos(3*x)");
+    }
+    if (!m_fixC4) {
+        _formula_ridge += (" + [3]*cos(4*x)");
+    }
+    _formula_ridge += (")");
+
+    f_show_ridge = new TF1("f_show_ridge",_formula_ridge.c_str(), m_dphiRangeLow, m_dphiRangeHigh);
+    f_show_ridge->SetParameter(0, f_HM->GetParameter(getNHar()+1)*m_ridge_scaleFactor);
+    f_show_ridge->SetParameter(1, f_HM->GetParameter(1)); // c2
+    if (!m_fixC3) {
+        f_show_ridge->SetParameter(2, f_HM->GetParameter(2)); // c3
+    }
+    if (!m_fixC4) {
+        f_show_ridge->SetParameter(3, f_HM->GetParameter(3)); // c4
+    }
+
+    return theResult;
+}
+
+
+
+subResult NonFlowSubtractor::templateHistFit (TH1* hist_LM,  TH1* hist_HM, TH1* hist_LM2) {
+
+    // make a copy before applying fit to record LM in case of ZYAM would be applied
+
+    TH1F* hist_LM_copy = (TH1F*) hist_LM->Clone("hist_LM_copy");
+    subResult result_hm  = templateHistFit(hist_LM, hist_HM);
+
+    // for keeping the plot stuff to be the same as running unimproved fit
+    // correction fit is done in different object 
+    NonFlowSubtractor subLM2;
+    subLM2.setNHar(NonFlowSubtractor::m_nhar_HM);
+    subLM2.setNHarLM(NonFlowSubtractor::m_nhar_LM);
+    // no ZYAM applied for obtaining c_n^{LM}
+    // there is just a random choice
+    // one should check what is the best way to estimate c_n^{LM}
+    subLM2.init();
+    if (m_debug) {
+        cout << endl;
+        cout << " ===================================================" << endl;
+        cout << " Running default template fitting to LM2 for obtaining correction" << endl;
+    }
+    subResult result_lm2 = subLM2.templateHistFit(hist_LM_copy, hist_LM2);
+
+    vector<float> vec_subImp_value;
+    vector<float> vec_subImp_error;
+    for (int ihar=0; ihar<getNHar(); ihar++){
+        float _rho      = result_hm .getRhoValue();
+        float _rho_error= result_hm .getRhoError();
+        float _coeff_hm = result_hm .getCoeffSubValue(ihar+1);
+        float _error_hm = result_hm .getCoeffSubError(ihar+1);
+        float _coeff_lm = result_lm2.getCoeffSubValue(ihar+1);
+        float _error_lm = result_lm2.getCoeffSubError(ihar+1);
+
+        // correlation coefficient between _coeff_hm and _rho
+        float _correlaiton = result_hm .getRhoCorrelation(ihar+1);
+
+        // depending on applying ZYAM to LM or not, the corrections are different but the results should converge given identical condition
+        float _coeff_corrected = _coeff_hm;
+        float _error = 0;
+        if (m_applyZYAM) {
+            // w/ ZYAM to LM, corrected = _coeff_hm + _rho*_coeff_lm 
+            _coeff_corrected = _coeff_hm + _rho*_coeff_lm;
+            _error = sqrt( pow( _error_hm,2) + pow( _rho*_error_lm,2) 
+                         + pow( _coeff_lm*_rho_error,2) + 2*_coeff_lm*_error_hm*_rho_error*_correlaiton);
+        } else {
+            // w/o ZYAM to LM, corrected = _coeff_hm - _rho*(_coeff_hm - _coeff_lm)
+            _coeff_corrected = _coeff_hm - _rho*(_coeff_hm - _coeff_lm);
+            _error = sqrt( pow((1-_rho)*_error_hm,2) 
+                               + pow( _rho*_error_lm,2)
+                               + pow( (_coeff_hm-_coeff_lm)*_rho_error,2)
+                               - 2*(1-_rho)*(_coeff_hm-_coeff_lm)*(_rho_error*_error_hm*_correlaiton)
+                               // ignore correlation between C_LM and rho/C_HM
+                               ); // to be improved
+        }
+
+        //special case for error estimation
+        if (_coeff_hm == _coeff_lm) _error = _error_hm; // using HM as LM2, error should stay the same as before improving
+        if (_coeff_hm == 0) _error = 0; // protection for n=1 when c1 == 0;
+
+        vec_subImp_value.push_back(_coeff_corrected);
+        vec_subImp_error.push_back(_error);
+    }
+    result_hm.setCoeffSubImp(vec_subImp_value, vec_subImp_error);
+
+    if (m_debug) {
+        cout << " ===================================================" << endl;
+        cout << std::setprecision(5) << " Improved template fitting results: " << endl;
+        cout << "  -unsubtracted:\t v22 value = " << result_hm.getV22RawValue() 
+             << ",\terror = " << result_hm.getV22RawError() 
+             << ",\trel_error = " << result_hm.getV22RawError()/result_hm.getV22RawValue() << endl;
+
+        cout << "  -default method:\t v22 value = " << result_hm.getV22SubValue() 
+             << ",\terror = " << result_hm.getV22SubError() 
+             << ",\trel_error = " << result_hm.getV22SubError()/result_hm.getV22SubValue() << endl;
+
+        cout << "  -improved method:\t v22 value = " << result_hm.getV22SubImpValue() 
+             << ",\terror = " << result_hm.getV22SubImpError() 
+             << ",\trel_error = " << result_hm.getV22SubImpError()/result_hm.getV22SubImpValue() << endl << endl;
+    }
+
+    return result_hm;
+}
+
+
+
+subResult NonFlowSubtractor::templateHistFit (TH1* hist_LM,  TH1* hist_HM, float cn_LM, float cn_LM_error) {
+
+    subResult result_hm  = templateHistFit(hist_LM, hist_HM);
+    if (m_debug) {
+        cout << endl;
+        cout << " ===================================================" << endl;
+        cout << " Running default template fitting with external cn_LM input" << endl;
+    }
+
+    vector<float> vec_subImp_value;
+    vector<float> vec_subImp_error;
+    for (int ihar=0; ihar<getNHar(); ihar++){
+        float _rho      = result_hm .getRhoValue();
+        float _rho_error= result_hm .getRhoError();
+        float _coeff_hm = result_hm .getCoeffSubValue(ihar+1);
+        float _error_hm = result_hm .getCoeffSubError(ihar+1);
+        float _coeff_lm = cn_LM;
+        float _error_lm = cn_LM_error;
+
+        float _correlaiton = result_hm .getRhoCorrelation(ihar+1);
+
+        //ignore error on rho
+        float _coeff_corrected = _coeff_hm - _rho*(_coeff_hm - _coeff_lm);
+        float _error = sqrt( pow((1-_rho)*_error_hm,2) 
+                           + pow( _rho*_error_lm,2)
+                           + pow( (_coeff_hm-_coeff_lm)*_rho_error,2)
+                           - 2*(1-_rho)*(_coeff_hm-_coeff_lm)*(_rho_error*_error_hm*_correlaiton)
+                           // ignore correlation between C_LM and rho/C_HM
+                           ); // to be improved
+
+        //special case for error estimation
+        if (_coeff_hm == _coeff_lm) _error = _error_hm; // using HM as LM2, error should stay the same as before improving
+        if (_coeff_hm == 0) _error = 0; // protection for n=1 when c1 == 0;
+
+        vec_subImp_value.push_back(_coeff_corrected);
+        vec_subImp_error.push_back(_error);
+    }
+    result_hm.setCoeffSubImp(vec_subImp_value, vec_subImp_error);
+
+    if (m_debug) {
+        cout << " ===================================================" << endl;
+        cout << std::setprecision(5) << " Improved template fitting results: " << endl;
+        cout << "  -unsubtracted:\t v22 value = " << result_hm.getV22RawValue() 
+             << ",\terror = " << result_hm.getV22RawError() 
+             << ",\trel_error = " << result_hm.getV22RawError()/result_hm.getV22RawValue() << endl;
+
+        cout << "  -default method:\t v22 value = " << result_hm.getV22SubValue() 
+             << ",\terror = " << result_hm.getV22SubError() 
+             << ",\trel_error = " << result_hm.getV22SubError()/result_hm.getV22SubValue() << endl;
+
+        cout << "  -improved method:\t v22 value = " << result_hm.getV22SubImpValue() 
+             << ",\terror = " << result_hm.getV22SubImpError() 
+             << ",\trel_error = " << result_hm.getV22SubImpError()/result_hm.getV22SubImpValue() << endl << endl;
+    }
+
+    return result_hm;
+}
+
+
+
+// old method
+// LM not included in stat. errors
+// not sure if one would use it
+subResult NonFlowSubtractor :: templateHistFit2(TH1* hist_LM, TH1* hist_HM) {
+
+    // temporary solution of incorporating errors from the LM
+    subResult _errorHelper = templateFit(hist_LM, hist_HM);
+
     m_hist_LMtemp = (TH1F*)hist_LM->Clone("hist_LMtemp");
 
     f_HM = new TF1("f_HM", templ_hist, m_dphiRangeLow, m_dphiRangeHigh, getNHar()+2);
@@ -23,8 +409,10 @@ subResult NonFlowSubtractor :: templateHistFit(TH1* hist_LM, TH1* hist_HM) {
 
     for (int i=0; i<getNHar(); i++) {
         vec_value_sub.push_back(f_HM->GetParameter(i));
-        vec_error_sub.push_back(f_HM->GetParError(i));
-
+        vec_error_sub.push_back(_errorHelper.getCoeffSubError(i+1));
+        cout << "c" << i+1 << ": hist based fitted value. = " << f_HM->GetParameter(i) << ", func based fitted value = " << _errorHelper.getCoeffSubValue(i+1) << endl;
+        cout << "c" << i+1 << ": error without LM stat. = " << f_HM->GetParError(i) << ", error with LM stat = " << _errorHelper.getCoeffSubError(i+1) << endl;
+        cout << endl;
     }
     theResult.setCoeffSub(vec_value_sub, vec_error_sub);
 
@@ -96,52 +484,15 @@ subResult NonFlowSubtractor :: templateHistFit(TH1* hist_LM, TH1* hist_HM) {
         f_show_ridge->SetParameter(3, f_HM->GetParameter(3)); // c4
     }
 
-    /*
-    // calculate chi2 distribution vs. c2
-    //
-    TF1* f_chi2Copy_HM = (TF1*)f_HM->Clone("f_chi2Copy_HM");
-
-    float _paraLow = 0;
-    float _paraHigh = 0.01;
-    int n_step = 20;
-    float _step_size = (_paraHigh - _paraLow)/n_step;
-    h_chi2_c2 = new TH1F("h_chi2_c2","",n_step,_paraLow,_paraHigh);
-
-    for (int istep = 0; istep < n_step; istep++) {
-        float _v22 = _paraLow + istep*_step_size;
-
-        double* _paras = f_chi2Copy_HM->GetParameters();
-        cout << f_chi2Copy_HM->GetParName(1) << ": " <<  f_chi2Copy_HM->GetParameter(1) << ",\t";
-        //f_chi2Copy_HM->FixParameter(1, _v22);
-        f_chi2Copy_HM->SetParameter(1, _v22);
-        //f_chi2Copy_HM->Update();
-        cout << f_chi2Copy_HM->GetParameter(1) << ",\t";
-
-        double _x[1] = {2.};
-        //cout << f_chi2Copy_HM->EvalPar(_x,_paras) << endl;
-        cout << f_chi2Copy_HM->Eval(2.) << endl;
-
-        float _chi2 = 0;
-        for (int i=1; i<m_hist_HM->GetXaxis()->GetNbins()+1; i++){
-            float _residual_HM = m_hist_HM->GetBinContent(i) - f_chi2Copy_HM->Eval(m_hist_HM->GetBinCenter(i));
-
-            //cout << _residual_HM << ",\t " << _residual_LM << endl;
-            //_chi2 += pow(_residual_HM/m_hist_HM->GetBinError(i),2) + pow(_residual_LM/m_hist_LM->GetBinError(i),2);
-            _chi2 += pow(_residual_HM/m_hist_HM->GetBinError(i),2);
-            //cout << _v22 << ",\t" << _residual_HM << endl;
-        } 
-
-        h_chi2_c2->SetBinContent(istep+1, _chi2);
-        h_chi2_c2->SetBinError(istep+1, 0);
-    }
-    */
 
     return theResult;
 }
 
 
 
-subResult NonFlowSubtractor :: templateHistFit(TH1* hist_LM, TH1* hist_LM_bulk, TH1* hist_HM) {
+// developping method
+// two different LM reference
+subResult NonFlowSubtractor :: templateHistFit2(TH1* hist_LM, TH1* hist_LM_bulk, TH1* hist_HM) {
     m_hist_LMtemp = (TH1F*)hist_LM->Clone("hist_LMtemp");
     m_hist_LMtemp_bulk = (TH1F*)hist_LM_bulk->Clone("hist_LMtemp_bulk");
 
@@ -256,6 +607,7 @@ subResult NonFlowSubtractor :: templateHistFit(TH1* hist_LM, TH1* hist_LM_bulk, 
 
 subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     // procedure largely based on https://root.cern/doc/master/combinedFit_8C_source.html
+    // main method used for p+Pb and UPC analysis
 
     const int Npar(getNHarLM() + getNHar() + 3);
     const int Npar_LM(getNHarLM() + 1);
@@ -265,11 +617,19 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
 
     subResult theResult;
 
-    f_LM = new TF1("f_LM", f_periph, m_dphiRangeLow, m_dphiRangeHigh, Npar_LM, 1);
+    // if one wants to apply ZYAM to LM, the fit function should be slightly modified
+    // such that the G^{LM} is the same for fits with and without applying ZYAM
+    // there could be other easier way to do ZYAM fit if one doesn't care about the meanings of parameters
+    if (m_applyZYAM) {
+        f_LM = new TF1("f_LM_zyam", f_periph_zyam, m_dphiRangeLow, m_dphiRangeHigh, Npar_LM, 1);
+        f_HM = new TF1("f_HM_zyam", templ_zyam,    m_dphiRangeLow, m_dphiRangeHigh, Npar, 1);
+    } else {
+        f_LM = new TF1("f_LM", f_periph, m_dphiRangeLow, m_dphiRangeHigh, Npar_LM, 1);
+        f_HM = new TF1("f_HM", templ,    m_dphiRangeLow, m_dphiRangeHigh, Npar, 1);
+    }
+
     f_LM->SetLineColor(kSpring-6);
     f_LM->SetLineStyle(3);
-
-    f_HM = new TF1("f_HM", templ, m_dphiRangeLow, m_dphiRangeHigh, Npar, 1);
     f_HM->SetLineColor(2);
 
     if (m_debug) {
@@ -278,24 +638,30 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
         f_HM->Print();
     }
 
-
     vector <double> parInitValues;
     parInitValues.clear();
     for (int i=0; i<Npar; i++) { 
         parInitValues.push_back(0);
     }
 
+
     //perform fourier fit first to get initial values
     subResult _init_LM = fourierFitLM(hist_LM);
-    double _value_G_LM = _init_LM.getPedstalValue();
+    double _value_G_LM = _init_LM.getPedstalValue(); // should be the same G_LM w/ and w/o zyam
     double _error_G_LM = _init_LM.getPedstalError();
     parInitValues.at(0) = _init_LM.getPedstalValue();
+
     for (int i=1; i<getNHarLM()+1; i++) {
         parInitValues.at(i) = _init_LM.getCoeffRawValue(i);
     }
 
+    if (m_applyZYAM) {
+        if (m_debug) cout << "Apply ZYAM" << endl;
+        ZYAM(hist_LM);
+    }
+
     // fit HM using LM paramerization
-    // be carefull to the index
+    // be carefull about the index
     subResult _init_HM = fourierFitLM(hist_HM);
     vector<float> vec_value_raw;
     vector<float> vec_error_raw;
@@ -307,10 +673,11 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     theResult.setCoeffRaw(vec_value_raw, vec_error_raw);
     double _value_G_HM = _init_HM.getPedstalValue();
     double _error_G_HM = _init_HM.getPedstalError();
-
+    // arbitrary guesses
     parInitValues.at(Npar-2) = 0.5;
     parInitValues.at(Npar-1) = 0.2;
 
+    // simultaneous fit construction
     ROOT::Math::WrappedMultiTF1 wf_LM(*f_LM, 1);
     ROOT::Math::WrappedMultiTF1 wf_HM(*f_HM, 1);
     ROOT::Fit::DataOptions opt;
@@ -328,12 +695,7 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
 
     ROOT::Fit::Fitter fitter;
     fitter.Config().SetParamsSettings(Npar, &parInitValues.at(0));
-    // print level 
-    // 0 = Quiet (Default in ROOT)
-    // 1 = just fit results (Default in this tool)
-    // 2 = fit results with iterations
-    // 3 = Verbose (additional details of iterations)
-    fitter.Config().MinimizerOptions().SetPrintLevel(0);
+    fitter.Config().MinimizerOptions().SetPrintLevel(m_fitPrintLevel);
     fitter.Config().SetMinimizer("Minuit2","Migrad");
     vector<unsigned int> minosErr_index;
     // only run minos errors for flow coefficents
@@ -354,6 +716,7 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
         fitter.Config().ParSettings(Npar_LM+3).SetValue(0);
         fitter.Config().ParSettings(Npar_LM+3).Fix();
     }
+    fitter.Config().ParSettings(0).Fix();
 
     // fix LM referece to initialize HM parameters
     for (int ipar = 1; ipar < getNHarLM()+1; ipar++) {
@@ -375,11 +738,12 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     }
 
 
-    //bool ROOT::Fit::Fitter::FitFCN (unsigned int npar, Function& fcn, const double* params = 0, unsigned int dataSize = 0, bool chi2fit = false)
+    // bool ROOT::Fit::Fitter::FitFCN (unsigned int npar, Function& fcn, const double* params = 0, unsigned int dataSize = 0, bool chi2fit = false)
     fitter.FitFCN(Npar, globalChi2, 0, data_LM.Size()+data_HM.Size(), true);
     
     if (!m_fixLM) {
         for (int ipar = 1; ipar < getNHarLM()+1; ipar++) {
+        //for (int ipar = 0; ipar < getNHarLM()+1; ipar++) {
             fitter.Config().ParSettings(ipar).Release();
         }
         // simultaneous fit with proper initial values
@@ -427,7 +791,7 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
         vec_value_sub.push_back(result.Value   (Npar_LM+ihar) );
         vec_error_sub.push_back(result.ParError(Npar_LM+ihar) );
         // F-coefficient correlation is used for rho-coefficient correlation
-        // used for improved fit error calculation
+        // needed for improved fit error calculation
         vec_correlation.push_back(result.Correlation(Npar-2, Npar_LM+ihar)*(_value_G_LM/_value_G_HM) );
 
         vec_minos_lower.push_back(result.LowerError(Npar_LM+ihar));
@@ -477,7 +841,13 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     // -------------------------------------------------------------
     // Prepare histograms and function for plotting 
     // uncorrected cn parameters are used for visulization
-    string _f_periph_forPlot = "[0] * ( 1 + 2*(";
+    string _f_periph_forPlot = "[0]";
+    if (m_applyZYAM) {
+        _f_periph_forPlot += " * ( 2*(";
+    } else {
+        _f_periph_forPlot += "* ( 1 + 2*(";
+    }
+
     for (int ihar=0; ihar<getNHarLM(); ihar++){
         _f_periph_forPlot += Form("[%d]*cos(%d*x)", ihar+1, ihar+1);
         if (ihar != getNHarLM()-1) _f_periph_forPlot += (" + ");
@@ -508,34 +878,39 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     m_hist_HM = (TH1F*)hist_HM->Clone("__hist_HM");
     m_hist_LM = (TH1F*)hist_LM->Clone("__hist_LM");
 
+    //cout << endl;
+    //cout << m_hist_LM->GetBinContent(m_hist_LM->FindBin(3.14)) << endl;
+    //cout << f_LM->Eval(3.14) << endl;
+    //cout << endl;
+
     m_h_ridge = (TH1F*) m_hist_HM->Clone("h_ridge");
     m_h_ridge->Reset();
     for (int i=1; i<m_hist_HM->GetXaxis()->GetNbins()+1; i++){
-        float _residual = m_hist_HM->GetBinContent(i) - f_show_periph->Eval(m_hist_HM->GetBinCenter(i));
+        float _residual = m_hist_HM->GetBinContent(i) - f_show_periph->Eval(m_hist_HM->GetBinCenter(i)) + result.Value(Npar - 1); // add back the pedestal
         _residual *= m_ridge_scaleFactor;
-        //float _residual_error = _residual * ( m_hist_HM->GetBinError(i) / m_hist_HM->GetBinContent(i) );
-        float _residual_error = m_hist_HM->GetBinError(i)*m_ridge_scaleFactor;
+        float _residual_error = _residual * ( m_hist_HM->GetBinError(i) / m_hist_HM->GetBinContent(i) ) * m_ridge_scaleFactor;
+        //float _residual_error = m_hist_HM->GetBinError(i)*m_ridge_scaleFactor;
         m_h_ridge->SetBinContent(i,_residual);
         m_h_ridge->SetBinError  (i,_residual_error);
     }
 
-    f_show_ridge2 = new TF1("f_show_ridge2","[0]*2*[1]*cos(2*x)", m_dphiRangeLow, m_dphiRangeHigh);
+    f_show_ridge2 = new TF1("f_show_ridge2","[0]*(1+2*[1]*cos(2*x))", m_dphiRangeLow, m_dphiRangeHigh);
     f_show_ridge2->SetParameter(0, result.Value(Npar - 1)*m_ridge_scaleFactor);
     f_show_ridge2->SetParameter(1, result.Value(getNHarLM()+2)); // c2
 
     if (!m_fixC3) {  
-        f_show_ridge3 = new TF1("f_show_ridge3","[0]*2*[1]*cos(3*x)", m_dphiRangeLow, m_dphiRangeHigh);
+        f_show_ridge3 = new TF1("f_show_ridge3","[0]*(1+2*[1]*cos(3*x))", m_dphiRangeLow, m_dphiRangeHigh);
         f_show_ridge3->SetParameter(0, result.Value(Npar - 1)*m_ridge_scaleFactor);
         f_show_ridge3->SetParameter(1, result.Value(getNHarLM()+3)); // c3
     }
 
     std::string _formula_ridge;
-    _formula_ridge = "[0]*2*([1]*cos(2*x)";
+    _formula_ridge = "[0]*(1+ 2*[1]*cos(2*x)";
     if (!m_fixC3) {
-        _formula_ridge += (" + [2]*cos(3*x)");
+        _formula_ridge += (" + 2*[2]*cos(3*x)");
     }
     if (!m_fixC4) {
-        _formula_ridge += (" + [3]*cos(4*x)");
+        _formula_ridge += (" + 2*[3]*cos(4*x)");
     }
     _formula_ridge += (")");
     f_show_ridge = new TF1("f_show_ridge", _formula_ridge.c_str(), m_dphiRangeLow, m_dphiRangeHigh);
@@ -543,12 +918,372 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     f_show_ridge->SetParameter(1, result.Value(getNHarLM()+2)); // c3
     if (!m_fixC3) {
         f_show_ridge->SetParameter(2, result.Value(getNHarLM()+3)); // c3
+    } else {
+        f_show_ridge->SetParameter(2, 0); // c3
     }
     if (!m_fixC4) {
         f_show_ridge->SetParameter(3, result.Value(getNHarLM()+4)); // c3
+    } else {
+        f_show_ridge->SetParameter(3, 0); // c3
     }
 
 
+    // for parameterization bias test
+    if (m_pesudoVaryScale != 0) {
+        TF1* f_pesudo_HM = new TF1("f_pesudo_HM", templ, m_dphiRangeLow, m_dphiRangeHigh, Npar);
+
+        for (int ipar = 0; ipar<f_HM->GetNpar(); ipar++) {
+            float _value = f_HM->GetParameter(ipar);
+            float _error = f_HM->GetParError(ipar);
+            f_pesudo_HM->SetParameter(ipar, _value);
+            f_pesudo_HM->SetParError (ipar, _error);
+
+            if (ipar == Npar_LM+1) f_pesudo_HM->SetParameter(ipar, _value*(1.+m_pesudoVaryScale));
+        }
+        f_pesudo_HM->Update();
+        m_hist_pesudo_HM = (TH1F*) hist_HM->Clone("m_hist_pesudo_HM");
+        m_hist_pesudo_LM = (TH1F*) hist_LM->Clone("m_hist_pesudo_LM");
+
+        for (int ibin=1; ibin < m_hist_pesudo_HM->GetNbinsX()+1; ibin++) {
+            float _binCenter = m_hist_pesudo_HM->GetXaxis()->GetBinCenter(ibin);
+            m_hist_pesudo_HM->SetBinContent(ibin, f_pesudo_HM->Eval(_binCenter));
+        }
+        delete f_pesudo_HM;
+    }
+
+
+    return theResult;
+}
+
+
+
+subResult NonFlowSubtractor :: referenceFit(TH1* hist_LM, TH1* hist_HM) {
+    // duplication of template fit with Seyoung's method
+
+    const int Npar(getNHarLM() + getNHar() + 3);
+    const int Npar_LM(getNHarLM() + 1);
+
+    const int _flowCoefIndex_begin = Npar_LM;
+    const int _flowCoefIndex_end = Npar_LM + getNHar();
+
+    subResult theResult;
+
+    f_LM = new TF1("f_LM", f_periph,       m_dphiRangeLow, m_dphiRangeHigh, Npar_LM, 1);
+    f_HM = new TF1("f_HM", seyoung_templ , m_dphiRangeLow, m_dphiRangeHigh, Npar, 1);
+
+    f_LM->SetLineColor(kSpring-6);
+    f_LM->SetLineStyle(3);
+    f_HM->SetLineColor(2);
+
+    if (m_debug) {
+        cout << "-----" << endl;
+        cout << "Npar = " << Npar << endl;
+        f_HM->Print();
+    }
+
+    vector <double> parInitValues;
+    parInitValues.clear();
+    for (int i=0; i<Npar; i++) { 
+        parInitValues.push_back(0);
+    }
+
+
+    //perform fourier fit first to get initial values
+    subResult _init_LM = fourierFitLM(hist_LM);
+    double _value_G_LM = _init_LM.getPedstalValue(); // should be the same G_LM w/ and w/o zyam
+    double _error_G_LM = _init_LM.getPedstalError();
+    parInitValues.at(0) = _init_LM.getPedstalValue();
+
+    for (int i=1; i<getNHarLM()+1; i++) {
+        parInitValues.at(i) = _init_LM.getCoeffRawValue(i);
+    }
+
+    // fit HM using LM paramerization
+    // be carefull about the index
+    subResult _init_HM = fourierFitLM(hist_HM);
+    vector<float> vec_value_raw;
+    vector<float> vec_error_raw;
+    for (int i=getNHarLM()+1; i<getNHarLM()+getNHar()+1; i++) { 
+        vec_value_raw.push_back(_init_HM.getCoeffRawValue(i-getNHarLM()));
+        vec_error_raw.push_back(_init_HM.getCoeffRawError(i-getNHarLM()));
+        parInitValues.at(i) = _init_HM.getCoeffRawValue(i-getNHarLM())/2.;
+    }
+    theResult.setCoeffRaw(vec_value_raw, vec_error_raw);
+    double _value_G_HM = _init_HM.getPedstalValue();
+    double _error_G_HM = _init_HM.getPedstalError();
+    // arbitrary guesses
+    parInitValues.at(Npar-2) = 0.5;
+    parInitValues.at(Npar-1) = _value_G_HM;
+
+    // simultaneous fit construction
+    ROOT::Math::WrappedMultiTF1 wf_LM(*f_LM, 1);
+    ROOT::Math::WrappedMultiTF1 wf_HM(*f_HM, 1);
+    ROOT::Fit::DataOptions opt;
+    ROOT::Fit::DataRange range;
+    range.SetRange(m_dphiRangeLow,m_dphiRangeHigh);
+    ROOT::Fit::BinData data_LM(opt,range);
+    ROOT::Fit::BinData data_HM(opt,range);
+    ROOT::Fit::FillData(data_LM, hist_LM);
+    ROOT::Fit::FillData(data_HM, hist_HM);
+    ROOT::Fit::Chi2Function chi2_LM(data_LM, wf_LM);
+    ROOT::Fit::Chi2Function chi2_HM(data_HM, wf_HM);
+    // combine the two pdf for LM and HM
+    // common parameters are decleared
+    GlobalChi2 globalChi2(chi2_LM, chi2_HM, getNHarLM(), getNHar());
+
+    ROOT::Fit::Fitter fitter;
+    fitter.Config().SetParamsSettings(Npar, &parInitValues.at(0));
+    fitter.Config().MinimizerOptions().SetPrintLevel(m_fitPrintLevel);
+    fitter.Config().SetMinimizer("Minuit2","Migrad");
+    vector<unsigned int> minosErr_index;
+    // only run minos errors for flow coefficents
+    for (int i = _flowCoefIndex_begin; i < _flowCoefIndex_end; i++) {
+        minosErr_index.push_back(i);
+    }
+    fitter.Config().SetMinosErrors( minosErr_index);
+
+    if (m_fixC1) {
+        fitter.Config().ParSettings(Npar_LM).SetValue(0);
+        fitter.Config().ParSettings(Npar_LM).Fix();
+    }
+    if (m_fixC3 && getNHar() > 2) {
+        fitter.Config().ParSettings(Npar_LM+2).SetValue(0);
+        fitter.Config().ParSettings(Npar_LM+2).Fix();
+    }
+    if (m_fixC4 && getNHar() > 3) {
+        fitter.Config().ParSettings(Npar_LM+3).SetValue(0);
+        fitter.Config().ParSettings(Npar_LM+3).Fix();
+    }
+    fitter.Config().ParSettings(0).Fix();
+
+    // fix LM referece to initialize HM parameters
+    for (int ipar = 1; ipar < getNHarLM()+1; ipar++) {
+        fitter.Config().ParSettings(ipar).Fix();
+    }
+
+    for (int ipar = 0; ipar < Npar; ipar++) {
+        fitter.Config().ParSettings(ipar).SetName(m_parName_HM.at(ipar).c_str());
+        f_HM->SetParName(ipar, m_parName_HM.at(ipar).c_str());
+    }
+    
+    if (m_debug) {
+        cout << " ===================================================" << endl;
+        cout << " Running ATLAS template fitting with the following initial values: " << endl;
+        for (int ipar = 0; ipar < fitter.Config().NPar(); ipar++) {
+            cout << "   parameter " << ipar << ":\t\tname = " << fitter.Config().ParSettings(ipar).Name().c_str() << ",\t\tvalue = " << fitter.Config().ParSettings(ipar).Value() << endl;
+        }
+        cout << endl;
+    }
+
+
+    // bool ROOT::Fit::Fitter::FitFCN (unsigned int npar, Function& fcn, const double* params = 0, unsigned int dataSize = 0, bool chi2fit = false)
+    fitter.FitFCN(Npar, globalChi2, 0, data_LM.Size()+data_HM.Size(), true);
+    
+    if (!m_fixLM) {
+        for (int ipar = 1; ipar < getNHarLM()+1; ipar++) {
+        //for (int ipar = 0; ipar < getNHarLM()+1; ipar++) {
+            fitter.Config().ParSettings(ipar).Release();
+        }
+        // simultaneous fit with proper initial values
+        fitter.FitFCN(Npar, globalChi2, 0, data_LM.Size()+data_HM.Size(), true);
+    }
+
+    ROOT::Fit::FitResult result = fitter.Result();
+    if (m_debug) {
+        cout << endl;
+        cout << "****************************************" << endl;
+        cout << "Fit results: " << endl;
+        result.Print(std::cout);
+        cout << endl;
+        cout << "+===================================================" << endl;
+        cout << "CovMatrix after fit: " << endl;
+        result.PrintCovMatrix(std::cout);
+        cout << endl;
+    }
+
+    double _value_F_temp = result.Value   (Npar-2);
+    double _error_F_temp = result.ParError(Npar-2);
+
+    double _value_rho_atlas = (_value_G_LM*_value_F_temp)/_value_G_HM;
+
+    // Ignore the correlations between G_HM/G_LM (from Fourier fit) and F_temp
+    // It's dominated by contribution from F_temp any way
+    double _error_rho_atlas = _value_rho_atlas*sqrt(pow(_error_G_LM/_value_G_LM, 2) 
+                                                  + pow(_error_G_HM/_value_G_HM, 2)
+                                                  + pow(_error_F_temp/_value_F_temp,2));
+
+    // fill the output result class
+    theResult.setNHar(getNHar());
+    theResult.setChi2(result.Chi2() / result.Ndf());
+    theResult.setPedstalValue (_value_G_HM);
+    theResult.setPedstalError (_error_G_HM);
+    theResult.setRhoValue (_value_rho_atlas);
+    theResult.setRhoError (_error_rho_atlas);
+
+    vector<float> vec_value_sub;
+    vector<float> vec_error_sub;
+    vector<float> vec_correlation;
+    vector<float> vec_minos_lower;
+    vector<float> vec_minos_upper;
+    for (int ihar=0; ihar<getNHar(); ihar++){
+        vec_value_sub.push_back(result.Value   (Npar_LM+ihar) );
+        vec_error_sub.push_back(result.ParError(Npar_LM+ihar) );
+        // F-coefficient correlation is used for rho-coefficient correlation
+        // needed for improved fit error calculation
+        vec_correlation.push_back(result.Correlation(Npar-2, Npar_LM+ihar)*(_value_G_LM/_value_G_HM) );
+
+        vec_minos_lower.push_back(result.LowerError(Npar_LM+ihar));
+        vec_minos_upper.push_back(result.UpperError(Npar_LM+ihar));
+    }
+
+    theResult.setCoeffSub(vec_value_sub, vec_error_sub);
+    theResult.setRhoCorrelation(vec_correlation);
+    theResult.setCoeffSubMinos(vec_minos_lower, vec_minos_upper);
+
+    if (m_debug) {
+        cout << endl;
+        cout << endl;
+        cout << "+===================================================" << endl;
+        cout << " Check relative errors" << endl;
+        cout << "   G_LM\tvalue = " << std::scientific << _value_G_LM 
+             << "\terror = " << _error_G_LM 
+             << "\trel_error = " << _error_G_LM/ _value_G_LM 
+             << endl;
+
+        cout << "   G_HM\tvalue = " << std::scientific << _value_G_HM 
+             << "\terror = " << _error_G_HM 
+             << "\trel_error = " << _error_G_HM/ _value_G_HM 
+             << endl;
+
+        cout << "   F_tm\tvalue = " << std::scientific << _value_F_temp 
+             << "\terror = " << _error_F_temp 
+             << "\trel_error = " << _error_F_temp/ _value_F_temp 
+             << endl;
+
+        cout << "   rho\tvalue = " << std::scientific << _value_rho_atlas 
+             << "\terror = " << _error_rho_atlas 
+             << "\trel_error = " << _error_rho_atlas/_value_rho_atlas 
+             << endl << endl;
+
+        cout << "+===================================================" << endl;
+        cout << " Compare different error estimations:" << endl;
+        // difference should indiate the non-linearity of the problem
+        for (int i = _flowCoefIndex_begin; i < _flowCoefIndex_end; i++) {
+            cout << "parameter: " << fitter.Config().ParSettings(i).Name() << endl;
+            cout << "\tHESSE error = " << result.ParError(i) << endl;
+            cout << "\tMinos error lower = " << result.LowerError(i) << ", upper = " << result.UpperError(i) << endl;
+        }
+    }
+
+    // construct stuffs for plotting
+    // -------------------------------------------------------------
+    // Prepare histograms and function for plotting 
+    // uncorrected cn parameters are used for visulization
+    string _f_periph_forPlot = "[0]";
+    _f_periph_forPlot += "* ( 1 + 2*(";
+
+    for (int ihar=0; ihar<getNHarLM(); ihar++){
+        _f_periph_forPlot += Form("[%d]*cos(%d*x)", ihar+1, ihar+1);
+        if (ihar != getNHarLM()-1) _f_periph_forPlot += (" + ");
+    }
+    _f_periph_forPlot += Form(") )*[%d] + [%d]", getNHarLM()+1, getNHarLM()+2);
+    if (m_debug) cout << "Scaled peripheral function: " << _f_periph_forPlot.c_str() << endl;
+    f_show_periph = new TF1("f_show_periph", _f_periph_forPlot.c_str(), m_dphiRangeLow, m_dphiRangeHigh);
+
+    for (int ipar = 0; ipar < getNHarLM()+1; ipar++) {
+        f_show_periph->SetParameter(ipar, result.Value(ipar));
+    }
+
+    f_show_periph->SetParameter(getNHarLM()+1, result.Value(Npar - 2));
+    f_show_periph->SetParameter(getNHarLM()+2, result.Value(Npar - 1));
+
+    f_show_flow2 = new TF1("f_show_flow2","[0] + [1]*(1+2*[2]*cos(2*x))", m_dphiRangeLow, m_dphiRangeHigh);
+    f_show_flow2->SetParameter(0, f_LM->Eval(0)*result.Value(Npar - 2));
+    f_show_flow2->SetParameter(1, result.Value(Npar - 1));
+    f_show_flow2->SetParameter(2, result.Value(getNHarLM()+2)); // c2
+
+    if (!m_fixC3) {  
+        f_show_flow3 = new TF1("f_show_flow3","[0] + [1]*(1+2*[2]*cos(3*x) )", m_dphiRangeLow, m_dphiRangeHigh);
+        f_show_flow3->SetParameter(0, f_LM->Eval(0)*result.Value(Npar - 2));
+        f_show_flow3->SetParameter(1, result.Value(Npar - 1));
+        f_show_flow3->SetParameter(2, result.Value(getNHarLM()+3)); // c3
+    }
+
+    m_hist_HM = (TH1F*)hist_HM->Clone("__hist_HM");
+    m_hist_LM = (TH1F*)hist_LM->Clone("__hist_LM");
+
+    //cout << endl;
+    //cout << m_hist_LM->GetBinContent(m_hist_LM->FindBin(3.14)) << endl;
+    //cout << f_LM->Eval(3.14) << endl;
+    //cout << endl;
+
+    m_h_ridge = (TH1F*) m_hist_HM->Clone("h_ridge");
+    m_h_ridge->Reset();
+    for (int i=1; i<m_hist_HM->GetXaxis()->GetNbins()+1; i++){
+        float _residual = m_hist_HM->GetBinContent(i) - f_show_periph->Eval(m_hist_HM->GetBinCenter(i)) + result.Value(Npar - 1); // add back the pedestal
+        _residual *= m_ridge_scaleFactor;
+        float _residual_error = _residual * ( m_hist_HM->GetBinError(i) / m_hist_HM->GetBinContent(i) ) * m_ridge_scaleFactor;
+        //float _residual_error = m_hist_HM->GetBinError(i)*m_ridge_scaleFactor;
+        m_h_ridge->SetBinContent(i,_residual);
+        m_h_ridge->SetBinError  (i,_residual_error);
+    }
+
+    f_show_ridge2 = new TF1("f_show_ridge2","[0]*(1+2*[1]*cos(2*x))", m_dphiRangeLow, m_dphiRangeHigh);
+    f_show_ridge2->SetParameter(0, result.Value(Npar - 1)*m_ridge_scaleFactor);
+    f_show_ridge2->SetParameter(1, result.Value(getNHarLM()+2)); // c2
+
+    if (!m_fixC3) {  
+        f_show_ridge3 = new TF1("f_show_ridge3","[0]*(1+2*[1]*cos(3*x))", m_dphiRangeLow, m_dphiRangeHigh);
+        f_show_ridge3->SetParameter(0, result.Value(Npar - 1)*m_ridge_scaleFactor);
+        f_show_ridge3->SetParameter(1, result.Value(getNHarLM()+3)); // c3
+    }
+
+    std::string _formula_ridge;
+    _formula_ridge = "[0]*(1+ 2*[1]*cos(2*x)";
+    if (!m_fixC3) {
+        _formula_ridge += (" + 2*[2]*cos(3*x)");
+    }
+    if (!m_fixC4) {
+        _formula_ridge += (" + 2*[3]*cos(4*x)");
+    }
+    _formula_ridge += (")");
+    f_show_ridge = new TF1("f_show_ridge", _formula_ridge.c_str(), m_dphiRangeLow, m_dphiRangeHigh);
+    f_show_ridge->SetParameter(0, result.Value(Npar - 1)*m_ridge_scaleFactor);
+    f_show_ridge->SetParameter(1, result.Value(getNHarLM()+2)); // c3
+    if (!m_fixC3) {
+        f_show_ridge->SetParameter(2, result.Value(getNHarLM()+3)); // c3
+    } else {
+        f_show_ridge->SetParameter(2, 0); // c3
+    }
+    if (!m_fixC4) {
+        f_show_ridge->SetParameter(3, result.Value(getNHarLM()+4)); // c3
+    } else {
+        f_show_ridge->SetParameter(3, 0); // c3
+    }
+
+
+    // for parameterization bias test
+    if (m_pesudoVaryScale != 0) {
+        TF1* f_pesudo_HM = new TF1("f_pesudo_HM", templ, m_dphiRangeLow, m_dphiRangeHigh, Npar);
+
+        for (int ipar = 0; ipar<f_HM->GetNpar(); ipar++) {
+            float _value = f_HM->GetParameter(ipar);
+            float _error = f_HM->GetParError(ipar);
+            f_pesudo_HM->SetParameter(ipar, _value);
+            f_pesudo_HM->SetParError (ipar, _error);
+
+            if (ipar == Npar_LM+1) f_pesudo_HM->SetParameter(ipar, _value*(1.+m_pesudoVaryScale));
+        }
+        f_pesudo_HM->Update();
+        m_hist_pesudo_HM = (TH1F*) hist_HM->Clone("m_hist_pesudo_HM");
+        m_hist_pesudo_LM = (TH1F*) hist_LM->Clone("m_hist_pesudo_LM");
+
+        for (int ibin=1; ibin < m_hist_pesudo_HM->GetNbinsX()+1; ibin++) {
+            float _binCenter = m_hist_pesudo_HM->GetXaxis()->GetBinCenter(ibin);
+            m_hist_pesudo_HM->SetBinContent(ibin, f_pesudo_HM->Eval(_binCenter));
+        }
+        delete f_pesudo_HM;
+    }
 
 
     return theResult;
@@ -558,6 +1293,9 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
 
 subResult NonFlowSubtractor::templateFit (TH1* hist_LM,  TH1* hist_HM, TH1* hist_LM2) {
 
+    // make a copy before applying fit to record LM in case of ZYAM would be applied
+
+    TH1F* hist_LM_copy = (TH1F*) hist_LM->Clone("hist_LM_copy");
     subResult result_hm  = templateFit(hist_LM, hist_HM);
 
     // for keeping the plot stuff to be the same as running unimproved fit
@@ -565,13 +1303,16 @@ subResult NonFlowSubtractor::templateFit (TH1* hist_LM,  TH1* hist_HM, TH1* hist
     NonFlowSubtractor subLM2;
     subLM2.setNHar(NonFlowSubtractor::m_nhar_HM);
     subLM2.setNHarLM(NonFlowSubtractor::m_nhar_LM);
+    // no ZYAM applied for obtaining c_n^{LM}
+    // there is just a random choice
+    // one should check what is the best way to estimate c_n^{LM}
     subLM2.init();
     if (m_debug) {
         cout << endl;
         cout << " ===================================================" << endl;
         cout << " Running default template fitting to LM2 for obtaining correction" << endl;
     }
-    subResult result_lm2 = subLM2.templateFit(hist_LM, hist_LM2);
+    subResult result_lm2 = subLM2.templateFit(hist_LM_copy, hist_LM2);
 
     vector<float> vec_subImp_value;
     vector<float> vec_subImp_error;
@@ -583,16 +1324,27 @@ subResult NonFlowSubtractor::templateFit (TH1* hist_LM,  TH1* hist_HM, TH1* hist
         float _coeff_lm = result_lm2.getCoeffSubValue(ihar+1);
         float _error_lm = result_lm2.getCoeffSubError(ihar+1);
 
+        // correlation coefficient between _coeff_hm and _rho
         float _correlaiton = result_hm .getRhoCorrelation(ihar+1);
 
-        //ignore error on rho
-        float _coeff_corrected = _coeff_hm - _rho*(_coeff_hm - _coeff_lm);
-        float _error = sqrt( pow((1-_rho)*_error_hm,2) 
-                           + pow( _rho*_error_lm,2)
-                           + pow( (_coeff_hm-_coeff_lm)*_rho_error,2)
-                           - 2*(1-_rho)*(_coeff_hm-_coeff_lm)*(_rho_error*_error_hm*_correlaiton)
-                           // ignore correlation between C_LM and rho/C_HM
-                           ); // to be improved
+        // depending on applying ZYAM to LM or not, the corrections are different but the results should converge given identical condition
+        float _coeff_corrected = _coeff_hm;
+        float _error = 0;
+        if (m_applyZYAM) {
+            // w/ ZYAM to LM, corrected = _coeff_hm + _rho*_coeff_lm 
+            _coeff_corrected = _coeff_hm + _rho*_coeff_lm;
+            _error = sqrt( pow( _error_hm,2) + pow( _rho*_error_lm,2) 
+                         + pow( _coeff_lm*_rho_error,2) + 2*_coeff_lm*_error_hm*_rho_error*_correlaiton);
+        } else {
+            // w/o ZYAM to LM, corrected = _coeff_hm - _rho*(_coeff_hm - _coeff_lm)
+            _coeff_corrected = _coeff_hm - _rho*(_coeff_hm - _coeff_lm);
+            _error = sqrt( pow((1-_rho)*_error_hm,2) 
+                               + pow( _rho*_error_lm,2)
+                               + pow( (_coeff_hm-_coeff_lm)*_rho_error,2)
+                               - 2*(1-_rho)*(_coeff_hm-_coeff_lm)*(_rho_error*_error_hm*_correlaiton)
+                               // ignore correlation between C_LM and rho/C_HM
+                               ); // to be improved
+        }
 
         //special case for error estimation
         if (_coeff_hm == _coeff_lm) _error = _error_hm; // using HM as LM2, error should stay the same as before improving
@@ -722,9 +1474,14 @@ subResult NonFlowSubtractor::fourierFit (TH1* hist, TH1* hist_LM) {
 }
 
 
-subResult NonFlowSubtractor::fourierFitLM (TH1* hist) {
+subResult NonFlowSubtractor::fourierFitLM (TH1* hist, bool _zyam) {
 
-    TF1* f_fourier = new TF1("f_fourier", _formula_LM.c_str(), m_dphiRangeLow, m_dphiRangeHigh);
+    TF1* f_fourier = 0;
+    if (_zyam) {
+        f_fourier = new TF1("f_fourier", _formula_LM_ZYAM.c_str(), m_dphiRangeLow, m_dphiRangeHigh);
+    } else {
+        f_fourier = new TF1("f_fourier", _formula_LM.c_str(), m_dphiRangeLow, m_dphiRangeHigh);
+    }
 
     // Sometimes there are problmes with the simple fourier fit due to not proper initialization
     f_fourier->SetParameter(0, hist->Integral());
@@ -1035,10 +1792,10 @@ bool NonFlowSubtractor :: plotAtlasHistSubHM (TCanvas* theCanvas) {
     h_show_HM->SetLineColor(2);
     h_show_HM->SetLineWidth(3);
     h_show_HM->Draw("HISTSAME");
-    f_show_flow2->SetLineColor(kBlue);
-    f_show_flow2->SetLineStyle(2);
-    f_show_flow2->SetLineWidth(3);
-    f_show_flow2->Draw("same");
+    //f_show_flow2->SetLineColor(kBlue);
+    //f_show_flow2->SetLineStyle(2);
+    //f_show_flow2->SetLineWidth(3);
+    //f_show_flow2->Draw("same");
     if (!m_fixC3) {
         f_show_flow3->SetLineColor(kOrange+1);
         f_show_flow3->SetLineStyle(3);
@@ -1195,9 +1952,9 @@ bool NonFlowSubtractor :: plotAtlasSubHM (TCanvas* theCanvas) {
 
     plotMarkerLineText(0.55, 0.85, 1.0,1, 20, 1,1,"HM Data", 0.05, true);
     plotMarkerLineText(0.55, 0.78, 0, 2, 1, 2, 1,"Fit", 0.05);
-    plotMarkerLineText(0.55, 0.71, 0, kSpring+4, 0, kSpring+4, 2,"#it{G} + #it{F}#it{Y}^{LM}", 0.05);
-    plotMarkerLineText(              0.74,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}(0)",0.05);
-    if (!m_fixC3) plotMarkerLineText(0.74,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge} + #it{F}#it{Y}^{LM}(0)", 0.05);
+    plotMarkerLineText(0.55, 0.71, 0, kSpring+4, 0, kSpring+4, 2,"#it{G}+#it{F}#it{Y}^{LM}", 0.05);
+    plotMarkerLineText(              0.74,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge}+#it{F}#it{Y}^{LM}(0)",0.05);
+    if (!m_fixC3) plotMarkerLineText(0.74,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge}+#it{F}#it{Y}^{LM}(0)", 0.05);
 
     float _chi2 = 0;
     for (int i=1; i<h_pull->GetXaxis()->GetNbins()+1; i++){
@@ -1207,22 +1964,27 @@ bool NonFlowSubtractor :: plotAtlasSubHM (TCanvas* theCanvas) {
         h_pull->SetBinError(i,m_hist_HM->GetBinError(i)/m_hist_HM->GetBinError(i));
         _chi2 += pow(_residual/m_hist_HM->GetBinError(i),2);
     }
-    _chi2 /= h_pull->GetXaxis()->GetNbins()-3;
+    _chi2 /= h_pull->GetXaxis()->GetNbins()- (getNHar() + 1);
     m_h_pull = (TH1F*) h_pull->Clone("m_h_Pull");
+    plotText( 0.65, 0.22, 1, Form("#it{#chi}^{2}/ndof = %.2f",_chi2), 0.05);
 
     pad2->cd();
     int MaxBin_sub = m_h_ridge->GetMaximumBin();
     int MinBin_sub = m_h_ridge->GetMinimumBin();
-    double Max_sub = TMath::Max( fabs(m_h_ridge->GetBinContent(MaxBin_sub)), fabs(m_h_ridge->GetBinContent(MinBin_sub)) )*4.;
-    double Min_sub = -1*Max_sub;
+    double Max_sub = m_h_ridge->GetBinContent(MaxBin_sub);
+    double Min_sub = m_h_ridge->GetBinContent(MinBin_sub);
+
+    double sub_distance = Max_sub - Min_sub;
+
     m_h_ridge->SetMarkerSize(0.8);
     //m_h_ridge->SetLineWidth(1);
-    m_h_ridge->GetYaxis()->SetRangeUser(Min_sub, Max_sub);
+    m_h_ridge->GetYaxis()->SetRangeUser(Min_sub - sub_distance, Max_sub + 2.*sub_distance);
+
     m_h_ridge->SetXTitle("#Delta#it{#phi}");
     if (m_ridge_scaleFactor != 1.0) {
-        m_h_ridge->SetYTitle(Form("(#it{Y}(#Delta#it{#phi}) - #it{F}#it{Y}^{LM}(#Delta#it{#phi}) - #it{G})#times%.0f", m_ridge_scaleFactor));
+        m_h_ridge->SetYTitle(Form("(#it{Y}(#Delta#it{#phi}) - #it{F}#it{Y}^{LM}(#Delta#it{#phi}))#times%.0f", m_ridge_scaleFactor));
     } else {
-        m_h_ridge->SetYTitle(Form("#it{Y}(#Delta#it{#phi}) - #it{F}#it{Y}^{LM}(#Delta#it{#phi}) - #it{G}"));
+        m_h_ridge->SetYTitle(Form("#it{Y}(#Delta#it{#phi}) - #it{F}#it{Y}^{LM}(#Delta#it{#phi})"));
     }
     m_h_ridge->GetYaxis()->SetNdivisions(406,kTRUE);
     m_h_ridge->GetYaxis()->SetLabelSize(0.06);
@@ -1250,9 +2012,9 @@ bool NonFlowSubtractor :: plotAtlasSubHM (TCanvas* theCanvas) {
         f_show_ridge3->Draw("same");
     }
     plotMarkerLineText(0.60, 0.85, 1.0,1, 20, 1,1,"Data", 0.05, true);
-    plotMarkerLineText(0.60, 0.78, 0, 2, 1, 2, 1,"#it{Y}^{ridge}-#it{G}", 0.05);
-    plotMarkerLineText(              0.77,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge}-#it{G}",0.05);
-    if (!m_fixC3) plotMarkerLineText(0.77,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge}-#it{G}", 0.05);
+    plotMarkerLineText(0.60, 0.78, 0, 2, 1, 2, 1,"#it{Y}^{ridge}", 0.05);
+    plotMarkerLineText(              0.77,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge}",0.05);
+    if (!m_fixC3) plotMarkerLineText(0.77,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge}", 0.05);
 
     pad1->cd();
 
@@ -1320,7 +2082,7 @@ bool NonFlowSubtractor :: plotAtlasHM (TCanvas* theCanvas) {
         h_pull->SetBinError(i,m_hist_HM->GetBinError(i)/m_hist_HM->GetBinError(i));
         _chi2 += pow(_residual/m_hist_HM->GetBinError(i),2);
     }
-    _chi2 /= h_pull->GetXaxis()->GetNbins()-3;
+    _chi2 /= h_pull->GetXaxis()->GetNbins()- (getNHar() + 1);
     m_h_pull = (TH1F*) h_pull->Clone("m_h_Pull");
 
     pad2->cd();
@@ -1421,7 +2183,7 @@ bool NonFlowSubtractor :: plotAtlasLM (TCanvas* theCanvas) {
     m_hist_LM->SetXTitle("#Delta#it{#phi}");
     m_hist_LM->SetYTitle("#it{Y}(#Delta#it{#phi})");
     m_hist_LM->GetYaxis()->SetRangeUser(Min_ref, Max_ref);
-    m_hist_LM->GetListOfFunctions()->Add(f_LM);
+    //m_hist_LM->GetListOfFunctions()->Add(f_LM);
     m_hist_LM->GetYaxis()->SetNdivisions(508,kTRUE);
     m_hist_LM->GetXaxis()->SetNdivisions(509,kTRUE);
     m_hist_LM->GetYaxis()->SetLabelSize(0.06);
@@ -1429,6 +2191,9 @@ bool NonFlowSubtractor :: plotAtlasLM (TCanvas* theCanvas) {
     m_hist_LM->GetYaxis()->SetTitleOffset(1.00);
     m_hist_LM->GetXaxis()->SetTickLength(0.067);
     m_hist_LM->Draw("EX0SAME");
+    f_LM->Draw("SAME");
+    cout << f_LM->Eval(0) << endl;
+    cout << endl;
     plotMarkerLineText(0.25,0.42, 1.2,1, 24, 1,1,"LM Data", 0.05, true);
     plotMarkerLineText(0.25,0.36, 0, 2, 1, kSpring-6, 3,"LM Fourier Fit", 0.05);
 

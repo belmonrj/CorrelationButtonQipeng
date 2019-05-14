@@ -9,11 +9,23 @@ class CorrelationMaker {
     bool m_debug;
     int m_rebin;
 
+    // Depth of the mixing pool
+    // default is 5;
+    int m_mixDepth;
+
     // index to show which trigger weight function to be applied;
-    // 0 for no trigger weight
-    // 1 for p+Pb HF analysis 
+    // 0 or > 4 for no trigger weight
+    // 1 for p+Pb hh correlation analysis 
+    // 2 for p+Pb Dh correlation analysis for L1_TE200
+    // 3 for p+Pb high run 313295
+    // 4 for p+Pb low run 313435
     // supports for other analysis to be added
     int m_weightCorrIndex; 
+
+    // remove the double counted pair from the correlation function errors
+    // false means no error correction
+    // true means run error correction for correlation of asso_pt_low <= trig_pt <= asso_pt_high
+    bool m_runStatCorr;
 
     float m_etaBinInterval;
     float m_etaBoundary;
@@ -26,6 +38,7 @@ class CorrelationMaker {
     float m_exclude_low;
     float m_exclude_high;
     bool  m_setExclude;
+
     // in case one wants to check the 1D signal and 1D mix
     TH1* m_h1_sig;
     TH1* m_h1_mix;
@@ -37,6 +50,10 @@ class CorrelationMaker {
 
     void setWeightIndex (int _n) { m_weightCorrIndex = _n; }
     int  getWeightIndex () { return m_weightCorrIndex; }
+
+    void setStatCorrection (bool _flag) { m_runStatCorr = _flag; }
+    bool getStatCorrection () { return m_runStatCorr; }
+
     void setRebin (int _n) { m_rebin = _n; }
     void setDebug (bool _debug = true) { m_debug = _debug; }
     void setConfig (const FlowAnaConfig* _config) { m_anaConfig = _config; }
@@ -46,13 +63,15 @@ class CorrelationMaker {
 
     const FlowAnaConfig* getConfig () const { return m_anaConfig; }
 
-    void get1DSigHist() const {return m_h1_sig;}
-    void get1DMixHist() const {return m_h1_mix;}
+    TH1* get1DSigHist() const {return m_h1_sig;}
+    TH1* get1DMixHist() const {return m_h1_mix;}
 
     void generateHist_bkgSub();
 
-    float weight2016HFAna(int index_Nch);
+    float weight2016hhAna(int index_Nch);
     float weight2016DzeroAna(int index_Nch);
+    float weight295(int index_Nch);
+    float weight435(int index_Nch);
 
     // main function for generating single 1D correlation histogram
     // method1 -- ATLAS mixed event normalization, projection first, then take ratio (default ATLAS method)
@@ -62,20 +81,19 @@ class CorrelationMaker {
     // method5 -- no mixed event correction  (for systematic study of mixing)
     // by default doing analaysis in pt and Nch
     virtual TH1* MakeCorr(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method = 1);
+    //virtual TH2* Make2DCorr(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high);
+    // Additional 3rd dimensions
+    // for D meson, invariant mass
+    // for muon, momentum imbalance
+    virtual TH1* MakeCorr(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, float _add_low, float _add_high, int method = 1);
 
     // for UPC analysis
     virtual TH1*  MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method = 1, int type = 1);
-    virtual float GetPtMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int type = 1);
+    virtual TH1*  MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, float _add_low, float _add_high, int method = 1, int type = 1);
+    virtual float GetPtMean  (float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int type = 1);
     virtual float GetMultMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int type = 1);
 
-    // Additional dimensions
-    // for D meson, invariant mass
-    // for muon, momentum imbalance
-    // for UPC, gap
-    virtual TH1* MakeCorr(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, float _add_low, float _add_high, int method = 1);
-
     virtual TH2* Make2DCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method = 1);
-    //virtual TH2* Make2DCorr(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high);
     //virtual TH2* Make2DCorr(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, float _add_low, float _add_high);
     
     void Plot2DCorrelation(TH2* h1, TCanvas* c1);
@@ -88,9 +106,13 @@ CorrelationMaker::CorrelationMaker() {
     m_debug = false;
     m_rebin = 1;
     m_weightCorrIndex = 0;
+    m_runStatCorr = true;
 
     m_etaBinInterval = 0.1;
     m_etaBoundary = 5.0;
+
+
+    m_mixDepth = 5;
 
     m_h1_sig = 0;
     m_h1_mix = 0;
@@ -118,7 +140,7 @@ void CorrelationMaker::init() {
 
 
 
-float CorrelationMaker::weight2016HFAna(int index_Nch) {
+float CorrelationMaker::weight2016hhAna(int index_Nch) {
     // use 1./lumi for this analysis
     float _lumi = 1.;
     if (index_Nch<14) _lumi = 0.082;
@@ -138,6 +160,29 @@ float CorrelationMaker::weight2016DzeroAna(int index_Nch) {
 }
 
 
+float CorrelationMaker::weight295(int index_Nch) {
+    // luminosity for triggers used in run 313295 in p+Pb
+    // use 1./lumi for this analysis
+    float _lumi = 1.;
+    if (index_Nch<14) _lumi = 0.004155;
+    else if (index_Nch<20) _lumi = 0.064152;
+    else if (index_Nch<24) _lumi = 0.376292;
+    else _lumi = 2.719786;
+    return 1./_lumi;
+}
+
+
+float CorrelationMaker::weight435(int index_Nch) {
+    // luminosity for triggers used in run 313295 in p+Pb
+    // use 1./lumi for this analysis
+    float _lumi = 1.;
+    if (index_Nch<20) _lumi = 0.016328;
+    else _lumi = 0.262875;
+    return 1./_lumi;
+}
+
+
+
 // a little bit wired to have multiplicity cut as float instead of int
 // however, just keep it this way for now
 TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method) {
@@ -154,6 +199,12 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
     m_anaConfig->inputFile()->cd();
     TH2* h2_nsig    = (TH2*)gDirectory->Get(m_anaConfig->getTrigYieldHistName().c_str());
     TH2* h2_nsigMix = (TH2*)gDirectory->Get(m_anaConfig->getMixTrigYieldHistName().c_str());
+
+    // Hard-coded accesse to raw 1D multiplicity distributions to support Erorr correction for hh correlation
+    // BE CAREFULL HERE
+    TH1F* h1_raw_Nch = 0;
+    h1_raw_Nch = (TH1F*)gDirectory->Get("h_Nch_selected_raw");
+    if (!h1_raw_Nch) cout << "Cannot retrieve 1D multiplicity hitogram for PTY calculation" << endl;
 
     if (!h2_nsig) cout << "Cannot retrieve yield hitogram for PTY calculation" << endl;
     if (!h2_nsigMix) cout << "Cannot retrieve mix-event yield hitogram for PTY calculation" << endl;
@@ -182,16 +233,67 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
 	        TH2* htemp_1 = (TH2*)gDirectory->Get(Form("%sNch%d_pt%d",path_sig.c_str(),iNch,ipt));
 	        TH2* htemp_2 = (TH2*)gDirectory->Get(Form("%sNch%d_pt%d",path_mix.c_str(),iNch,ipt));
 
+            // Error correction
+            // for double counting trig-asso pairs
+            if (m_runStatCorr) {
+                // only apply the correction in case the trigger particle collection is a subset of the associate particle collection
+                if (  m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  <= m_anaConfig->getAssoPtHigh()
+                   && m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) >= m_anaConfig->getAssoPtLow() ) {
+
+                    
+                    // nEvent is calculated from raw 1D multiplicity distribution
+                    // only consequence would be slightly underestimation <Ntrig> due to too large Nevt including events without particle passing trigger selection
+                    // still better than no error correction
+                    int _Nch_bin_low  = h1_raw_Nch->FindBin(_Nch_low);
+                    int _Nch_bin_high = h1_raw_Nch->FindBin(_Nch_high);
+                    float _nEvt = h1_raw_Nch->Integral(_Nch_bin_low, _Nch_bin_high);
+
+                    // error correction for double counting based on effective sample size
+                    float _Neff_trig = pow(h2_nsig->GetBinContent(ipt+1, iNch+1)/h2_nsig->GetBinError(ipt+1, iNch+1), 2)/_nEvt;
+                    float _Neff_pair_same  = htemp_1->GetEffectiveEntries()/_nEvt;
+                    float _Ncorr_pair_same = _Neff_pair_same - 0.5*_Neff_trig*(_Neff_trig-1);
+                    float _errorScale_same = sqrt(_Neff_pair_same/_Ncorr_pair_same);
+                    if (m_debug) {
+                        cout << "Running the error correction: " << endl; 
+                        cout << "-----------------------------------------" << endl; 
+                        cout << "Raw effective size: " << _Neff_pair_same 
+                             << ", trigger particle effective size: " << _Neff_trig
+                             << ", Corrected effective size: " << _Ncorr_pair_same
+                             << ", Error correction scale " << _errorScale_same << endl;
+                    } 
+                    // mixed event error corrections
+                    // not sure how useful they are
+                    float _Neff_pair_mix  = htemp_1->GetEffectiveEntries()/_nEvt;
+                    float _Ncorr_pair_mix = _Neff_pair_mix - 0.5*m_mixDepth*_Neff_trig*(_Neff_trig-1);
+                    float _errorScale_mix = sqrt(_Neff_pair_mix/_Ncorr_pair_mix);
+
+                    for (int xbin=1; xbin<htemp_1->GetNbinsX()+1; xbin++) {
+                        for (int ybin=1; ybin<htemp_1->GetNbinsY()+1; ybin++) {
+                            htemp_1->SetBinError(xbin, ybin, htemp_1->GetBinError(xbin,ybin)*_errorScale_same);
+                            htemp_2->SetBinError(xbin, ybin, htemp_2->GetBinError(xbin,ybin)*_errorScale_mix );
+                        }
+                    }
+                }
+            }
+
             float _weight = 1.;
             if (getWeightIndex() == 1) {
-                _weight = weight2016HFAna(iNch);
+                _weight = weight2016hhAna(iNch);
+            } else if (getWeightIndex() == 2) {
+                _weight = weight2016DzeroAna(iNch);
+            } else if (getWeightIndex() == 3) {
+                _weight = weight295(iNch);
+            } else if (getWeightIndex() == 4) {
+                _weight = weight435(iNch);
             }
             // to be extend to support other analysis
-
             htemp_1->Scale(_weight);
             htemp_2->Scale(_weight);
             nsig += h2_nsig->GetBinContent(ipt+1, iNch+1) * _weight;
             nsigMix += h2_nsigMix->GetBinContent(ipt+1, iNch+1) * _weight;
+
+            // apply stat error correction here
+            // getStatCorrection()
 
 	        if (iNch==index_Nch_low && ipt==index_pt_low) {
 	            h1 = (TH2*) htemp_1->Clone(Form("h1_Nch%d_%d", index_Nch_low, index_Nch_high));
@@ -214,8 +316,8 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
     if (m_h1_mix) {delete m_h1_mix; m_h1_mix = 0;}
 
     // nbins to project
-    int nbins_low  = (m_jetEtaIndexLow-1) - m_etaBinIndexLow + 1;
-    int nbins_high = m_etaBinIndexHigh - (m_jetEtaIndexHigh+1) + 1;
+    int nbins_low  = 0.00001 + (m_jetEtaIndexLow-1) - m_etaBinIndexLow + 1;
+    int nbins_high = 0.00001 + m_etaBinIndexHigh - (m_jetEtaIndexHigh+1) + 1;
     if (nbins_low != nbins_high) cout << nbins_low << ",\t " << nbins_high << endl;
 
     if (method == 1) {
@@ -224,10 +326,10 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
         // then take ratio of two 1D hist
 
         // Make projections first
-        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
-        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
 
         float int_S = m_h1_sig->Integral();
 
@@ -243,10 +345,10 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
         // take 2D ratio, then project to 1D
         
         // start with N_{pair}
-        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
-        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
         float int_S = m_h1_sig->Integral();
 
         h1->Scale(1./h1->Integral());
@@ -254,8 +356,8 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
         TH2F* h_correlation = (TH2F*)h1->Clone();
         h_correlation->Divide(h2);
 
-        hphi    = h_correlation->ProjectionY(Form("h_phi_Nch%d", index_Nch_low), m_etaBinIndexLow, m_jetEtaIndexLow-1, "e");
-        hphi->Add(h_correlation->ProjectionY(Form("h_phi2_Nch%d",index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh, "e"));
+        hphi    = h_correlation->ProjectionY(Form("h_phi_Nch%d", index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e");
+        hphi->Add(h_correlation->ProjectionY(Form("h_phi2_Nch%d",index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh, "e"));
 
         float int_C = hphi->Integral();
         float K = int_S / int_C;
@@ -272,10 +374,10 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
         h2->Scale( 1./content_00 );
 
         // Make projections first
-        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
-        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
 
         m_h1_sig->Scale(1./(nbins_low + nbins_high));
         m_h1_mix->Scale(1./(nbins_low + nbins_high));
@@ -293,8 +395,8 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
         TH2F* h_correlation = (TH2F*)h1->Clone();
         h_correlation->Divide(h2);
 
-        hphi    = h_correlation->ProjectionY(Form("h_sig_phi_Nch%d", index_Nch_low), m_etaBinIndexLow, m_jetEtaIndexLow-1, "e");
-        hphi->Add(h_correlation->ProjectionY(Form("h_sig_phi2_Nch%d",index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh, "e"));
+        hphi    = h_correlation->ProjectionY(Form("h_sig_phi_Nch%d", index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e");
+        hphi->Add(h_correlation->ProjectionY(Form("h_sig_phi2_Nch%d",index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh, "e"));
         hphi->Scale(1./(nbins_low + nbins_high)); 
         
 
@@ -303,8 +405,8 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
         // copied from method 1
 
         // Make projections first
-        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
 
         hphi = (TH1*)m_h1_sig->Clone(Form("_hphi"));
         hphi->Scale(1./nsig, "width"); //per trigger & per deltaPhi yield
@@ -320,6 +422,20 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
     hphi->Rebin(m_rebin);
     hphi->Scale(1./m_rebin);
     hphi->SetName(Form("h_pty_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.0fto%.0f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+
+    if (m_h1_sig) {
+        m_h1_sig->Rebin(m_rebin);
+        m_h1_sig->Scale(1./m_rebin);
+        m_h1_sig->Scale(1./m_h1_mix->Integral());
+        m_h1_sig->SetName(Form("h_sig_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.0fto%.0f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+    }
+    
+    if (m_h1_mix){
+        m_h1_mix->Rebin(m_rebin);
+        m_h1_mix->Scale(1./m_rebin);
+        m_h1_mix->Scale(1./m_h1_mix->Integral());
+        m_h1_mix->SetName(Form("h_mix_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.0fto%.0f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+    }
 
     return hphi;
 }
@@ -464,6 +580,43 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
 	        TH2D* htemp_1 = (TH2D*)gDirectory->Get(Form("%sMq%d_ptq%d_Pq%d",path_sig.c_str(),iNch, ipt, type));
 	        TH2D* htemp_2 = (TH2D*)gDirectory->Get(Form("%sMq%d_ptq%d_Sq0_tq0_Pq%d",path_mix.c_str(),iNch, ipt, type));
 
+            // Error correction
+            // for double counting trig-asso pairs
+            if (m_runStatCorr) {
+                if (  m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  <= m_anaConfig->getAssoPtHigh()
+                   && m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) >= m_anaConfig->getAssoPtLow() ) {
+
+                    
+                    float _nEvt = 1; // to be updated when nEvt is available from Blair
+
+                    // error correction for double counting based on effective sample size
+                    float _Neff_trig = pow(h2_nsig->GetBinContent(ipt+1, iNch+1)/h2_nsig->GetBinError(ipt+1, iNch+1), 2)/_nEvt;
+                    //float _Neff_trig = h2_nsig->GetBinContent(ipt+1, iNch+1)/_nEvt;
+                    float _Neff_pair_same  = htemp_1->GetEffectiveEntries()/_nEvt;
+                    float _Ncorr_pair_same = _Neff_pair_same - 0.5*_Neff_trig*(_Neff_trig-1);
+                    float _errorScale_same = sqrt(_Neff_pair_same/_Ncorr_pair_same);
+                    if (m_debug) {
+                        cout << "Running the error correction: " << endl; 
+                        cout << "Raw effective size: " << _Neff_pair_same 
+                             << ", trigger particle effective size: " << _Neff_trig
+                             << ", Corrected effective size: " << _Ncorr_pair_same
+                             << ", Error correction scale " << _errorScale_same << endl;
+                    } 
+                    // mixed event error corrections
+                    // not sure how useful they are
+                    float _Neff_pair_mix  = htemp_1->GetEffectiveEntries()/_nEvt;
+                    float _Ncorr_pair_mix = _Neff_pair_mix - 0.5*m_mixDepth*_Neff_trig*(_Neff_trig-1);
+                    float _errorScale_mix = sqrt(_Neff_pair_mix/_Ncorr_pair_mix);
+
+                    for (int xbin=1; xbin<htemp_1->GetNbinsX()+1; xbin++) {
+                        for (int ybin=1; ybin<htemp_1->GetNbinsY()+1; ybin++) {
+                            htemp_1->SetBinError(xbin, ybin, htemp_1->GetBinError(xbin,ybin)*_errorScale_same);
+                            htemp_2->SetBinError(xbin, ybin, htemp_2->GetBinError(xbin,ybin)*_errorScale_mix );
+                        }
+                    }
+                }
+            }
+
             nsig += h2_nsig->GetBinContent(ipt+1, iNch+1);
             //cout << Form("%sMq%d_ptq%d_Pq%d",path_sig.c_str(),iNch, ipt, type) << endl;
             //cout << "\tnsig = " <<  h2_nsig->GetBinContent(ipt+1, iNch+1) << endl;
@@ -502,17 +655,18 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
     if (m_h1_mix) {delete m_h1_mix; m_h1_mix = 0;}
 
     // nbins to project
-    int nbins_low  = (m_jetEtaIndexLow-1) - m_etaBinIndexLow + 1;
-    int nbins_high = m_etaBinIndexHigh - (m_jetEtaIndexHigh+1) + 1;
+    int nbins_low  = 0.00001 + (m_jetEtaIndexLow-1) - m_etaBinIndexLow + 1;
+    int nbins_high = 0.00001 + m_etaBinIndexHigh - (m_jetEtaIndexHigh+1) + 1;
 
     if (nbins_low != nbins_high) cout << nbins_low << ",\t " << nbins_high << endl;
     if (m_debug) {
         cout << endl;
         cout << "Debug the gap index determination: " << endl;
+
         cout << m_etaBinIndexLow << ",\t" << m_jetEtaIndexLow -1 
-             << " <==> " << h1->GetXaxis()->GetBinLowEdge(m_etaBinIndexLow) << ",\t" << h1->GetXaxis()->GetBinUpEdge(m_jetEtaIndexLow -1) << endl;
+             << " <==> " << h1->GetXaxis()->GetBinLowEdge(0.00001 + m_etaBinIndexLow) << ",\t" << h1->GetXaxis()->GetBinUpEdge(0.00001 + m_jetEtaIndexLow -1) << endl;
         cout << m_jetEtaIndexHigh+1 << ",\t" << m_etaBinIndexHigh
-             << " <==> " << h1->GetXaxis()->GetBinLowEdge(m_jetEtaIndexHigh+1) << ",\t" << h1->GetXaxis()->GetBinUpEdge(m_etaBinIndexHigh) << endl;
+             << " <==> " << h1->GetXaxis()->GetBinLowEdge(0.00001 + m_jetEtaIndexHigh+1) << ",\t" << h1->GetXaxis()->GetBinUpEdge(0.00001 + m_etaBinIndexHigh) << endl;
         cout << "\tMerged Nbins negative side =  " << nbins_low << ", positive side =  " << nbins_high << endl;
         cout << endl;
     }
@@ -523,10 +677,12 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
         // then take ratio of two 1D hist
 
         // Make projections first
-        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
-        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
+        // since we are converting float index to int index
+        // +0.00001 to avoid fluctuations in C++
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
 
         float int_S = m_h1_sig->Integral();
 
@@ -546,10 +702,10 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
         // take 2D ratio, then project to 1D
         
         // start with N_{pair}
-        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
-        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
         float int_S = m_h1_sig->Integral();
 
         h1->Scale(1./h1->Integral());
@@ -557,8 +713,8 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
         TH2D* h_correlation = (TH2D*)h1->Clone();
         h_correlation->Divide(h2);
 
-        hphi    = h_correlation->ProjectionY(Form("h_phi_Nch%d", index_Nch_low), m_etaBinIndexLow, m_jetEtaIndexLow-1, "e");
-        hphi->Add(h_correlation->ProjectionY(Form("h_phi2_Nch%d",index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh, "e"));
+        hphi    = h_correlation->ProjectionY(Form("h_phi_Nch%d", index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e");
+        hphi->Add(h_correlation->ProjectionY(Form("h_phi2_Nch%d",index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh, "e"));
 
         float int_C = hphi->Integral();
         float K = int_S / int_C;
@@ -575,10 +731,10 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
         h2->Scale( 1./content_00 );
 
         // Make projections first
-        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
-        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
 
         m_h1_sig->Scale(1./(nbins_low + nbins_high));
         m_h1_mix->Scale(1./(nbins_low + nbins_high));
@@ -596,8 +752,8 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
         TH2D* h_correlation = (TH2D*)h1->Clone();
         h_correlation->Divide(h2);
 
-        hphi    = h_correlation->ProjectionY(Form("h_sig_phi_Nch%d", index_Nch_low), m_etaBinIndexLow, m_jetEtaIndexLow-1, "e");
-        hphi->Add(h_correlation->ProjectionY(Form("h_sig_phi2_Nch%d",index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh, "e"));
+        hphi    = h_correlation->ProjectionY(Form("h_sig_phi_Nch%d", index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e");
+        hphi->Add(h_correlation->ProjectionY(Form("h_sig_phi2_Nch%d",index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh, "e"));
         hphi->Scale(1./(nbins_low + nbins_high)); 
         
     } else if (method == 5) {
@@ -609,8 +765,8 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
         if (m_debug) { 
             cout << "Integral before projection: " << h1->Integral() << endl;
         }
-        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
         if (m_debug) { 
             cout << "Integral after projection: " << m_h1_sig->Integral() << endl;
         }
@@ -633,10 +789,327 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
 
     hphi->Rebin(m_rebin);
     hphi->Scale(1./m_rebin);
-    hphi->SetName(Form("h_pty_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.0fto%.0f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+    hphi->SetName(Form("h_pty_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.1fto%.1f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+
+    if (m_h1_sig) {
+        m_h1_sig->Rebin(m_rebin);
+        //m_h1_sig->Scale(1./m_rebin);
+        m_h1_sig->Scale(1./m_h1_sig->Integral());
+        m_h1_sig->SetName(Form("h_sig_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.1fto%.1f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+    }
+    
+    if (m_h1_mix){
+        m_h1_mix->Rebin(m_rebin);
+        //m_h1_mix->Scale(1./m_rebin);
+        m_h1_mix->Scale(1./m_h1_mix->Integral());
+        m_h1_mix->SetName(Form("h_mix_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.1fto%.1f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+    }
 
     return hphi;
 }
+
+
+
+TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, float _add_low, float _add_high, int method, int type) {
+
+    TH2D* h1 = 0;
+    TH2D* h2 = 0;
+
+    string path_sig = m_anaConfig->getCorrHistPathSame();
+    string path_mix = m_anaConfig->getCorrHistPathMix();
+
+    if (m_debug) cout << "Merging the following slices" << endl;
+    int index_Nch_low = 0;
+    int index_Nch_high = 0;
+    for (int iNch=1; iNch<m_anaConfig->getInputMultiBinning()->GetXaxis()->GetNbins() + 1; iNch++){
+        if (m_anaConfig->getInputMultiBinning()->GetXaxis()->GetBinLowEdge(iNch) == _Nch_low)  index_Nch_low  = iNch - 1; 
+        if (m_anaConfig->getInputMultiBinning()->GetXaxis()->GetBinUpEdge(iNch)  == _Nch_high) index_Nch_high = iNch - 1; 
+    }
+
+
+    int index_pt_low = 0;
+    int index_pt_high = 0;
+    for (int ipt=1; ipt<m_anaConfig->getInputPtBinning()->GetXaxis()->GetNbins() + 1; ipt++){
+        if (m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) == _pt_low)  index_pt_low  = ipt - 1; 
+        if (m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  == _pt_high) index_pt_high = ipt - 1; 
+    }
+    if (m_debug) {
+        cout << "index_Nch_low = " << index_Nch_low << ",\tindex_Nch_high = " << index_Nch_high << endl;
+        cout << "index_pt_low  = " << index_pt_low << ", \tindex_pt_high  = " << index_pt_high << endl;
+    }
+
+
+    int index_add_low = 0;
+    int index_add_high = 0;
+    for (int iadd=1; iadd<m_anaConfig->getInputThirdBinning()->GetXaxis()->GetNbins() + 1; iadd++){
+        if (m_anaConfig->getInputThirdBinning()->GetXaxis()->GetBinLowEdge(iadd) == _add_low)  index_add_low  = iadd - 1; 
+        if (m_anaConfig->getInputThirdBinning()->GetXaxis()->GetBinUpEdge(iadd)  == _add_high) index_add_high = iadd - 1; 
+    }
+
+
+    m_anaConfig->inputFile()->cd();
+    TH3* h2_nsig = (TH3*)gDirectory->Get(m_anaConfig->getTrigYieldHistName().c_str());
+    if (!h2_nsig) cout << "Cannot retrieve yield hitogram for PTY calculation" << endl;
+    if (m_debug) {
+        cout << "pt binning of h2_nsig: " << endl;
+        int ix = 1;
+        for (; ix < h2_nsig->GetNbinsX()+1; ix++) {
+            cout << h2_nsig->GetXaxis()->GetBinLowEdge(ix) << ", ";
+        }
+        cout << h2_nsig->GetXaxis()->GetBinUpEdge(ix-1) << endl;
+
+        cout << "Multiplicity binning of h2_nsig: " << endl;
+        ix = 1;
+        for (; ix < h2_nsig->GetNbinsY()+1; ix++) {
+            cout << h2_nsig->GetYaxis()->GetBinLowEdge(ix) << ", ";
+        }
+        cout << h2_nsig->GetYaxis()->GetBinUpEdge(ix-1) << endl;
+    }
+
+    m_anaConfig->inputFile()->cd();
+    float nsig = 0;
+    for (int iNch=index_Nch_low; iNch<index_Nch_high+1; iNch++) {
+        for (int ipt=index_pt_low; ipt<index_pt_high+1; ipt++) {
+            for (int iadd=index_add_low; iadd<index_add_high+1; iadd++) {
+
+                // example names
+                //h_deta_dphi_same_Mq8_ptq7_Sq15_Pq1
+                //h2_deta_dphi_mixed_Mq8_ptq7_Sq15_tq0_Pq1
+	            TH2D* htemp_1 = (TH2D*)gDirectory->Get(Form("%sMq%d_ptq%d_Sq%d_Pq%d", path_sig.c_str(), iNch, ipt, iadd, type));
+	            TH2D* htemp_2 = (TH2D*)gDirectory->Get(Form("%sMq%d_ptq%d_Sq%d_tq0_Pq%d",path_mix.c_str(),iNch, ipt, iadd, type));
+
+                // Error correction
+                // for double counting trig-asso pairs
+                if (m_runStatCorr) {
+                //if (0) {
+                    if (  m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  <= m_anaConfig->getAssoPtHigh()
+                       && m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) >= m_anaConfig->getAssoPtLow() ) {
+
+                        /*
+                        float _nEvt = 1; // to be updated when nEvt is available from Blair
+
+                        // error correction for double counting based on effective sample size
+                        float _Neff_trig = pow(h2_nsig->GetBinContent(ipt+1, iNch+1)/h2_nsig->GetBinError(ipt+1, iNch+1), 2)/_nEvt;
+                        //float _Neff_trig = h2_nsig->GetBinContent(ipt+1, iNch+1)/_nEvt;
+                        float _Neff_pair_same  = htemp_1->GetEffectiveEntries()/_nEvt;
+                        float _Ncorr_pair_same = _Neff_pair_same - 0.5*_Neff_trig*(_Neff_trig-1);
+                        float _errorScale_same = sqrt(_Neff_pair_same/_Ncorr_pair_same);
+                        if (m_debug) {
+                            cout << "Running the error correction: " << endl; 
+                            cout << "Raw effective size: " << _Neff_pair_same 
+                                 << ", trigger particle effective size: " << _Neff_trig
+                                 << ", Corrected effective size: " << _Ncorr_pair_same
+                                 << ", Error correction scale " << _errorScale_same << endl;
+                        } 
+                        // mixed event error corrections
+                        // not sure how useful they are
+                        float _Neff_pair_mix  = htemp_1->GetEffectiveEntries()/_nEvt;
+                        float _Ncorr_pair_mix = _Neff_pair_mix - 0.5*m_mixDepth*_Neff_trig*(_Neff_trig-1);
+                        float _errorScale_mix = sqrt(_Neff_pair_mix/_Ncorr_pair_mix);
+                        */
+
+                        for (int xbin=1; xbin<htemp_1->GetNbinsX()+1; xbin++) {
+                            for (int ybin=1; ybin<htemp_1->GetNbinsY()+1; ybin++) {
+                                htemp_1->SetBinError(xbin, ybin, htemp_1->GetBinError(xbin,ybin)*sqrt(2));
+                                htemp_2->SetBinError(xbin, ybin, htemp_2->GetBinError(xbin,ybin)*sqrt(2));
+                            }
+                        }
+                    }
+                }
+
+                nsig += h2_nsig->GetBinContent(ipt+1, iNch+1, iadd+1);
+                //cout << Form("%sMq%d_ptq%d_Pq%d",path_sig.c_str(),iNch, ipt, type) << endl;
+                //cout << "\tnsig = " <<  h2_nsig->GetBinContent(ipt+1, iNch+1) << endl;
+                //htemp_1->Print();
+                //cout << "-------------" << endl;
+
+	            if (iNch==index_Nch_low && ipt==index_pt_low) {
+	                h1 = (TH2D*) htemp_1->Clone(Form("h1_Nch%d_%d_pt%d_pt%d", index_Nch_low, index_Nch_high, index_pt_low, index_pt_high));
+	                h2 = (TH2D*) htemp_2->Clone(Form("h2_Nch%d_%d_pt%d_pt%d", index_Nch_low, index_Nch_high, index_pt_low, index_pt_high));
+	            } else {
+                    h1->Add(htemp_1);
+                    h2->Add(htemp_2);
+	            }
+
+                //double _width1 = m_anaConfig->getCorrEtaInterval();
+                //double _width2 = h1->GetXaxis()->GetBinWidth(1);
+                //if (_width2 != _width1) {
+                //    cout << "Input bin width = " << h1->GetXaxis()->GetBinWidth(1) << endl;
+                //    cout << "tool configuration = " << m_anaConfig->getCorrEtaInterval() << endl;
+                //}
+
+	            delete htemp_1;
+	            delete htemp_2;
+                if (m_debug) {
+                    cout << "pt: " << h2_nsig->GetXaxis()->GetBinLowEdge(ipt+1) << " ~ " << h2_nsig->GetXaxis()->GetBinUpEdge(ipt+1) << endl;
+                    cout << "nch: " << h2_nsig->GetYaxis()->GetBinLowEdge(iNch+1) << " ~ " << h2_nsig->GetYaxis()->GetBinUpEdge(iNch+1) << endl;
+                    cout << "gap: " << h2_nsig->GetZaxis()->GetBinLowEdge(iadd+1) << " ~ " << h2_nsig->GetZaxis()->GetBinUpEdge(iadd+1) << endl;
+	                cout << "pt index = " << ipt << ", Nch index = " << iNch << ", gap index = " << iadd << endl;
+	                cout << "ntrig = " << h2_nsig->GetBinContent(ipt+1, iNch+1) << endl;
+                }
+            }
+        }
+    }
+
+    TH1* hphi;
+    if (m_debug) cout << "Merged same event entries: " << h1->GetEntries()/1e6 << "M" << endl;
+    if (m_h1_sig) {delete m_h1_sig; m_h1_sig = 0;}
+    if (m_h1_mix) {delete m_h1_mix; m_h1_mix = 0;}
+
+    // nbins to project
+    int nbins_low  = 0.00001 + (m_jetEtaIndexLow-1) - m_etaBinIndexLow + 1;
+    int nbins_high = 0.00001 + m_etaBinIndexHigh - (m_jetEtaIndexHigh+1) + 1;
+
+    if (nbins_low != nbins_high) cout << nbins_low << ",\t " << nbins_high << endl;
+    if (m_debug) {
+        cout << endl;
+        cout << "Debug the gap index determination: " << endl;
+
+        cout << m_etaBinIndexLow << ",\t" << m_jetEtaIndexLow -1 
+             << " <==> " << h1->GetXaxis()->GetBinLowEdge(0.00001 + m_etaBinIndexLow) << ",\t" << h1->GetXaxis()->GetBinUpEdge(0.00001 + m_jetEtaIndexLow -1) << endl;
+        cout << m_jetEtaIndexHigh+1 << ",\t" << m_etaBinIndexHigh
+             << " <==> " << h1->GetXaxis()->GetBinLowEdge(0.00001 + m_jetEtaIndexHigh+1) << ",\t" << h1->GetXaxis()->GetBinUpEdge(0.00001 + m_etaBinIndexHigh) << endl;
+        cout << "\tMerged Nbins negative side =  " << nbins_low << ", positive side =  " << nbins_high << endl;
+        cout << endl;
+    }
+
+    if (method == 1) {
+        // ATLAS style mixed event normalization
+        // make 1D project of signal and mix first
+        // then take ratio of two 1D hist
+
+        // Make projections first
+        // since we are converting float index to int index
+        // +0.00001 to avoid fluctuations in C++
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+
+        float int_S = m_h1_sig->Integral();
+
+        hphi = (TH1*)m_h1_sig->Clone(Form("_hphi"));
+        hphi->Divide(m_h1_mix);
+
+        float int_C = hphi->Integral();
+        float K = int_S / int_C;
+        if (m_debug) {
+            cout << "int_S = " << int_S << endl;
+            cout << "int_C = " << int_C << endl;
+        }
+        hphi->Scale(K/nsig, "width"); //per trigger & per deltaPhi yield
+
+    } else if (method == 2) {
+        // ATLAS style mixed event normalization
+        // take 2D ratio, then project to 1D
+        
+        // start with N_{pair}
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        float int_S = m_h1_sig->Integral();
+
+        h1->Scale(1./h1->Integral());
+        h2->Scale(1./h2->Integral());
+        TH2D* h_correlation = (TH2D*)h1->Clone();
+        h_correlation->Divide(h2);
+
+        hphi    = h_correlation->ProjectionY(Form("h_phi_Nch%d", index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e");
+        hphi->Add(h_correlation->ProjectionY(Form("h_phi2_Nch%d",index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh, "e"));
+
+        float int_C = hphi->Integral();
+        float K = int_S / int_C;
+        hphi->Scale(K/nsig, "width"); //per trigger & per deltaPhi yield
+
+    } else if (method == 3) { 
+        // CMS style mixed event normalization
+        // make 1D project of signal and mix first
+        // then take ratio of two 1D hist
+        h1->Scale(1./nsig, "width");
+        h2->Scale(1., "width");
+        int bin_00 = h2->FindBin(0,0);
+        float content_00 = h2->GetBinContent(bin_00);
+        h2->Scale( 1./content_00 );
+
+        // Make projections first
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+
+        m_h1_sig->Scale(1./(nbins_low + nbins_high));
+        m_h1_mix->Scale(1./(nbins_low + nbins_high));
+
+        hphi = (TH1*)m_h1_sig->Clone(Form("_hphi"));
+        hphi->Divide(m_h1_mix);
+    } else if (method == 4) {
+        // CMS style mixed event normalization
+        // take 2D ratio, then project to 1D
+        h1->Scale(1./nsig, "width");
+        h2->Scale(1., "width");
+        int bin_00 = h2 ->FindBin(0,0);
+        float content_00 = h2->GetBinContent(bin_00);
+        h2->Scale( 1./content_00 );
+        TH2D* h_correlation = (TH2D*)h1->Clone();
+        h_correlation->Divide(h2);
+
+        hphi    = h_correlation->ProjectionY(Form("h_sig_phi_Nch%d", index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e");
+        hphi->Add(h_correlation->ProjectionY(Form("h_sig_phi2_Nch%d",index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh, "e"));
+        hphi->Scale(1./(nbins_low + nbins_high)); 
+        
+    } else if (method == 5) {
+        // no mixing applied
+        // copied from method 1
+
+        // Make projections first
+        
+        if (m_debug) { 
+            cout << "Integral before projection: " << h1->Integral() << endl;
+        }
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        if (m_debug) { 
+            cout << "Integral after projection: " << m_h1_sig->Integral() << endl;
+        }
+
+        hphi = (TH1*)m_h1_sig->Clone(Form("_hphi"));
+        hphi->Scale(1./nsig, "width"); //per trigger & per deltaPhi yield
+
+        if (m_debug) { 
+            cout << "nsig = " << nsig << endl;
+            cout << "per trigger yield = " << hphi->Integral("width") << endl;
+        }
+
+    } else {
+        cout << "method is not supported, please choose from 1~3" << endl;
+    }
+
+    if (m_debug) cout << "------------------------------------------" << endl;
+    delete h1;
+    delete h2;
+
+    hphi->Rebin(m_rebin);
+    hphi->Scale(1./m_rebin);
+    hphi->SetName(Form("h_pty_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.1fto%.1f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+
+    if (m_h1_sig) {
+        m_h1_sig->Rebin(m_rebin);
+        //m_h1_sig->Scale(1./m_rebin);
+        m_h1_sig->Scale(1./m_h1_sig->Integral());
+        m_h1_sig->SetName(Form("h_sig_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.1fto%.1f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+    }
+    
+    if (m_h1_mix){
+        m_h1_mix->Rebin(m_rebin);
+        //m_h1_mix->Scale(1./m_rebin);
+        m_h1_mix->Scale(1./m_h1_mix->Integral());
+        m_h1_mix->SetName(Form("h_mix_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.1fto%.1f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+    }
+
+    return hphi;
+}
+
 
 
 
@@ -679,6 +1152,7 @@ TH2* CorrelationMaker::Make2DCorrUpc(float _pt_low, float _pt_high, float _Nch_l
             //h2_deta_dphi_mixed_Mq7_ptq4_Sq0_tq0_Pq1
 	        TH2* htemp_1 = (TH2*)gDirectory->Get(Form("%sMq%d_ptq%d_Pq1",path_sig.c_str(),iNch,ipt));
 	        TH2* htemp_2 = (TH2*)gDirectory->Get(Form("%sMq%d_ptq%d_Sq0_tq0_Pq1",path_mix.c_str(),iNch,ipt));
+
 
             htemp_2->Scale(htemp_1->Integral()/htemp_2->Integral());
 
@@ -809,9 +1283,30 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
 	            TH2* htemp_1 = (TH2*)gDirectory->Get(Form("%sNch%d_pt%d_%s%d",path_sig.c_str(),iNch,ipt, m_anaConfig->getThirdDimensionName().c_str(), iadd));
 	            TH2* htemp_2 = (TH2*)gDirectory->Get(Form("%sNch%d_pt%d_%s%d",path_mix.c_str(),iNch,ipt, m_anaConfig->getThirdDimensionName().c_str(), iadd));
 
+                // error correction for double counting based on effective sample size
+                float _Neff_trig = pow(h2_nsig->GetBinContent(ipt+1, iNch+1, iadd+1)/h2_nsig->GetBinError(ipt+1, iNch+1, iadd+1), 2); 
+                float _Neff_pair_same  = htemp_1->GetEffectiveEntries();
+                float _Ncorr_pair_same = _Neff_pair_same - 0.5*_Neff_trig*(_Neff_trig-1);
+                float _errorScale_same = sqrt(_Neff_pair_same/_Ncorr_pair_same);
+                // mixed event error correction
+                // not sure how useful they are
+                float _Neff_pair_mix  = htemp_1->GetEffectiveEntries();
+                float _Ncorr_pair_mix = _Neff_pair_mix - 0.5*m_mixDepth*_Neff_trig*(_Neff_trig-1);
+                float _errorScale_mix = sqrt(_Neff_pair_mix/_Ncorr_pair_mix);
+
+                // Error correction
+                // no need for D-h, psi-h correlation study
+                // not implemented for here
+
                 float _weight = 1.;
                 if (getWeightIndex() == 1) {
-                    _weight = weight2016HFAna(iNch);
+                    _weight = weight2016hhAna(iNch);
+                } else if (getWeightIndex() == 2) {
+                    _weight = weight2016DzeroAna(iNch);
+                } else if (getWeightIndex() == 3) {
+                    _weight = weight295(iNch);
+                } else if (getWeightIndex() == 4) {
+                    _weight = weight435(iNch);
                 }
                 // to be extend to support other analysis
 
@@ -844,8 +1339,8 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
     if (m_h1_mix) {delete m_h1_mix; m_h1_mix = 0;}
 
     // nbins to project
-    int nbins_low  = (m_jetEtaIndexLow-1) - m_etaBinIndexLow + 1;
-    int nbins_high = m_etaBinIndexHigh - (m_jetEtaIndexHigh+1) + 1;
+    int nbins_low  = 0.00001 + (m_jetEtaIndexLow-1) - m_etaBinIndexLow + 1;
+    int nbins_high = 0.00001 + m_etaBinIndexHigh - (m_jetEtaIndexHigh+1) + 1;
     if (nbins_low != nbins_high) cout << nbins_low << ",\t " << nbins_high << endl;
 
     if (method == 1) {
@@ -854,10 +1349,10 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
         // then take ratio of two 1D hist
 
         // Make projections first
-        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
-        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
 
         float int_S = m_h1_sig->Integral();
 
@@ -873,10 +1368,10 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
         // take 2D ratio, then project to 1D
         
         // start with N_{pair}
-        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
-        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
         float int_S = m_h1_sig->Integral();
 
         h1->Scale(1./h1->Integral());
@@ -884,8 +1379,8 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
         TH2F* h_correlation = (TH2F*)h1->Clone();
         h_correlation->Divide(h2);
 
-        hphi    = h_correlation->ProjectionY(Form("h_phi_Nch%d", index_Nch_low), m_etaBinIndexLow, m_jetEtaIndexLow-1, "e");
-        hphi->Add(h_correlation->ProjectionY(Form("h_phi2_Nch%d",index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh, "e"));
+        hphi    = h_correlation->ProjectionY(Form("h_phi_Nch%d", index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e");
+        hphi->Add(h_correlation->ProjectionY(Form("h_phi2_Nch%d",index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh, "e"));
 
         float int_C = hphi->Integral();
         float K = int_S / int_C;
@@ -902,10 +1397,10 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
         h2->Scale( 1./content_00 );
 
         // Make projections first
-        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
-        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
 
         m_h1_sig->Scale(1./(nbins_low + nbins_high));
         m_h1_mix->Scale(1./(nbins_low + nbins_high));
@@ -923,8 +1418,8 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
         TH2F* h_correlation = (TH2F*)h1->Clone();
         h_correlation->Divide(h2);
 
-        hphi    = h_correlation->ProjectionY(Form("h_sig_phi_Nch%d", index_Nch_low), m_etaBinIndexLow, m_jetEtaIndexLow-1, "e");
-        hphi->Add(h_correlation->ProjectionY(Form("h_sig_phi2_Nch%d",index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh, "e"));
+        hphi    = h_correlation->ProjectionY(Form("h_sig_phi_Nch%d", index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e");
+        hphi->Add(h_correlation->ProjectionY(Form("h_sig_phi2_Nch%d",index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh, "e"));
         hphi->Scale(1./(nbins_low + nbins_high)); 
         
 
@@ -933,8 +1428,8 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
         // copied from method 1
 
         // Make projections first
-        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), m_etaBinIndexLow,    m_jetEtaIndexLow-1, "e" );
-        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), m_jetEtaIndexHigh+1, m_etaBinIndexHigh,  "e" ) );
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
 
         hphi = (TH1*)m_h1_sig->Clone(Form("_hphi"));
         hphi->Scale(1./nsig, "width"); //per trigger & per deltaPhi yield
@@ -988,7 +1483,7 @@ void CorrelationMaker::Plot2DCorrelation(TH2* h1, TCanvas* c1) {
     h1->GetZaxis()->CenterTitle();
     h1->GetZaxis()->SetTitleOffset(1.20);
     h1->Draw("SURF1FB");
-    //ATLASLabel(0.02,0.94,"Internal");
+    ATLASLabel(0.02,0.94,"Internal");
     //myText(    0.02,0.89,1,"#it{p}+Pb #sqrt{#it{s}_{NN}} = 8.16 TeV");
     //myText(    0.02,0.83,1,"#it{h}-#it{h} Correlation");
     //myText(    0.02,0.12,1,"0.5 < #it{p}_{T}^{trig,asso} < 5 GeV");
@@ -996,81 +1491,3 @@ void CorrelationMaker::Plot2DCorrelation(TH2* h1, TCanvas* c1) {
     pad->SetPhi(45); // default is 30
     pad->Update();
 }
-
-/*
-void CorrelationMaker::generateHist_multi() {
-
-    fout->mkdir("PTYRaw");
-    fout->mkdir("PTYRaw/SameEvtCorrelation");
-    fout->mkdir("PTYRaw/MixedEvtCorrelation");
-
-    const int _nBins =  m_anaConfig->getOutputMultiBinning()->GetXaxis()->GetNbins()
-    const double* _multiOutput_range = m_anaConfig->getOutputMultiBinning()->GetXaxis()->GetXbins()->GetArray();
-
-    for (int i=0; i<_nBins; i++) {
-
-       	// index is the histogram index (0~Nbins-1) in the files
-       	// the histogram index number is bin index - 1
-       	float Nch_low  = _multiOutput_range[i];
-       	float Nch_high = _multiOutput_range[i+1];
-
-       	int index_Nch_low = 0;
-       	int index_Nch_high = 0;
-       	for (int iNch=1; iNch<hNch_binning->GetXaxis()->GetNbins() + 1; iNch++){
-       	    if (hNch_binning->GetXaxis()->GetBinLowEdge(iNch) == Nch_low) index_Nch_low = iNch - 1; 
-       	    if (hNch_binning->GetXaxis()->GetBinUpEdge(iNch) == Nch_high) index_Nch_high = iNch - 1; 
-       	}
-
-
-        {
-            // targeting pt selection for trigger particles 
-            // index is the histogram index (0~Nbins-1) in the files
-            // the histogram index number is bin index - 1
-            int index_pt_low = 0;
-            int index_pt_high = 0;
-            for (int ipt=1; ipt<hpt_binning->GetXaxis()->GetNbins() + 1; ipt++){
-                if (hpt_binning->GetXaxis()->GetBinLowEdge(ipt) == ptCutLow_dNch) index_pt_low = ipt - 1; 
-                if (hpt_binning->GetXaxis()->GetBinUpEdge(ipt)  == ptCutHigh_dNch) index_pt_high = ipt - 1; 
-            }
-
-            for (int method = 1; method < 3; method++) {
-                for (int iwgt = 1; iwgt < 2; iwgt++) {
-                    bool _isWeighted = true;
-                    string path_wgt = "Wgt";
-                    if (iwgt == 1) {
-                        _isWeighted = false;
-                        path_wgt = "Raw";
-                    }
-                    string path_method = "PTY";
-                    if (method == 2) path_method = "Corr";
-
-                    if (i==0) {
-                        // peripheral reference
-                        TH1* h_dphi_ref = MakeCorr(index_pt_low, index_pt_high, index_Nch_ref_low, index_Nch_ref_high, _isWeighted, method);
-                        h_dphi_ref->SetNameTitle("dphi_Nch_ref","");
-                        fout->cd(Form("%s%s",path_method.c_str(), path_wgt.c_str()));
-                        h_dphi_ref->Write();
-                    }
-
-                    TH1* h_dphi = MakeCorr(index_pt_low, index_pt_high, index_Nch_low, index_Nch_high, _isWeighted, method);
-                    h_dphi->SetNameTitle(Form("dphi_Nch%d",i),"");
-                    fout->cd(Form("%s%s",path_method.c_str(), path_wgt.c_str()));
-                    h_dphi->Write();
-
-                    if (h1_sig) {
-                        fout->cd(Form("%s%s/SameEvtCorrelation",path_method.c_str(), path_wgt.c_str()));
-                        h1_sig->SetNameTitle(Form("dphi_sig_Nch%d",i),"");
-                        h1_sig->Write();
-                    }
-                    if (h1_mix) {
-                        fout->cd(Form("%s%s/MixedEvtCorrelation",path_method.c_str(), path_wgt.c_str()));
-                        h1_mix->SetNameTitle(Form("dphi_mix_Nch%d",i),"");
-                        h1_mix->Write();
-                    }
-                }
-            }
-
-        } // test histogram for pt slices
-}
-
-*/
