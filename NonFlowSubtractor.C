@@ -8,7 +8,17 @@ subResult NonFlowSubtractor :: templateHistFit(TH1* hist_LM, TH1* hist_HM) {
     const int _flowCoefIndex_begin = 0;
     const int _flowCoefIndex_end = getNHar()-1;
 
+    if (m_applyZYAM) {
+        if (m_debug) cout << "Apply ZYAM" << endl;
+        ZYAM(hist_LM);
+    }
+
+    m_hist_LMtemp = (TH1F*)hist_LM->Clone("hist_LMtemp");
+    m_hist_HMtemp = (TH1F*)hist_HM->Clone("hist_HMtemp");
+
     f_HM = new TF1("f_HM", templ_hist, m_dphiRangeLow, m_dphiRangeHigh, Npar, 1);
+    f_HM->FixParameter(0,0);
+    hist_HM->Fit("f_HM", "0US");
 
     vector <double> parInitValues;
     parInitValues.clear();
@@ -21,14 +31,6 @@ subResult NonFlowSubtractor :: templateHistFit(TH1* hist_LM, TH1* hist_HM) {
     double _value_G_LM = _init_LM.getPedstalValue(); // parameter needed for one-step correction
     double _error_G_LM = _init_LM.getPedstalError();
 
-    if (m_applyZYAM) {
-        if (m_debug) cout << "Apply ZYAM" << endl;
-        ZYAM(hist_LM);
-    }
-
-    m_hist_LMtemp = (TH1F*)hist_LM->Clone("hist_LMtemp");
-    m_hist_HMtemp = (TH1F*)hist_HM->Clone("hist_HMtemp");
-
     subResult theResult;
     // fit HM using LM paramerization
     // be carefull to the index
@@ -38,14 +40,14 @@ subResult NonFlowSubtractor :: templateHistFit(TH1* hist_LM, TH1* hist_HM) {
     for (int i=0; i<getNHar(); i++) { 
         vec_value_raw.push_back(_init_HM.getCoeffRawValue(i+1));
         vec_error_raw.push_back(_init_HM.getCoeffRawError(i+1));
-        parInitValues.at(i) = _init_HM.getCoeffRawValue(i+1)/2.;
+        parInitValues.at(i) = f_HM->GetParameter(i);
     }
     theResult.setCoeffRaw(vec_value_raw, vec_error_raw);
     double _value_G_HM = _init_HM.getPedstalValue();
     double _error_G_HM = _init_HM.getPedstalError();
     // arbitrary guesses
-    parInitValues.at(Npar-2) = 0.5;
-    parInitValues.at(Npar-1) = 0.2;
+    parInitValues.at(Npar-2) = f_HM->GetParameter(getNHar());
+    parInitValues.at(Npar-1) = f_HM->GetParameter(getNHar()+1);
 
 
     ROOT::Fit::DataOptions opt;
@@ -1792,10 +1794,10 @@ bool NonFlowSubtractor :: plotAtlasHistSubHM (TCanvas* theCanvas) {
     h_show_HM->SetLineColor(2);
     h_show_HM->SetLineWidth(3);
     h_show_HM->Draw("HISTSAME");
-    //f_show_flow2->SetLineColor(kBlue);
-    //f_show_flow2->SetLineStyle(2);
-    //f_show_flow2->SetLineWidth(3);
-    //f_show_flow2->Draw("same");
+    f_show_flow2->SetLineColor(kBlue);
+    f_show_flow2->SetLineStyle(2);
+    f_show_flow2->SetLineWidth(3);
+    f_show_flow2->Draw("same");
     if (!m_fixC3) {
         f_show_flow3->SetLineColor(kOrange+1);
         f_show_flow3->SetLineStyle(3);
