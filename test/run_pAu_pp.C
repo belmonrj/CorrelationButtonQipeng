@@ -101,34 +101,34 @@ void run_pAu_pp()
   TFile* fSeyoung_pp = TFile::Open("seyoung_data_pp.root");
 
   // ---
-  h_BBCN_BBCS[nmultbins] = (TH1D*)fSeyoung_pp->Get(Form("h_BBCN_BBCS_C%d",0));
-  h_BBCN_FVTN[nmultbins] = (TH1D*)fSeyoung_pp->Get(Form("h_BBCN_FVTN_C%d",0));
-  h_BBCN_FVTS[nmultbins] = (TH1D*)fSeyoung_pp->Get(Form("h_BBCN_FVTS_C%d",0));
-  if ( h_BBCN_BBCS[nmultbins] == NULL ) cout << "uh oh BBCN_BBCS" << endl;
-  if ( h_BBCN_FVTN[nmultbins] == NULL ) cout << "uh oh BBCN_FVTN" << endl;
-  if ( h_BBCN_FVTS[nmultbins] == NULL ) cout << "uh oh BBCN_FVTS" << endl;
+  h_BBCN_BBCS[4] = (TH1D*)fSeyoung_pp->Get(Form("h_BBCN_BBCS_C%d",0));
+  h_BBCN_FVTN[4] = (TH1D*)fSeyoung_pp->Get(Form("h_BBCN_FVTN_C%d",0));
+  h_BBCN_FVTS[4] = (TH1D*)fSeyoung_pp->Get(Form("h_BBCN_FVTS_C%d",0));
+  if ( h_BBCN_BBCS[4] == NULL ) cout << "uh oh BBCN_BBCS" << endl;
+  if ( h_BBCN_FVTN[4] == NULL ) cout << "uh oh BBCN_FVTN" << endl;
+  if ( h_BBCN_FVTS[4] == NULL ) cout << "uh oh BBCN_FVTS" << endl;
   // ---
-  h_FVTN_BBCS[nmultbins] = (TH1D*)fSeyoung_pp->Get(Form("h_FVTN_BBCS_C%d",0));
-  h_FVTN_FVTS[nmultbins] = (TH1D*)fSeyoung_pp->Get(Form("h_FVTN_FVTS_C%d",0));
-  h_FVTS_BBCS[nmultbins] = (TH1D*)fSeyoung_pp->Get(Form("h_FVTS_BBCS_C%d",0));
-  if ( h_FVTN_BBCS[nmultbins] == NULL ) cout << "uh oh FVTN_BBCS" << endl;
-  if ( h_FVTN_FVTS[nmultbins] == NULL ) cout << "uh oh FVTN_FVTS" << endl;
-  if ( h_FVTS_BBCS[nmultbins] == NULL ) cout << "uh oh FVTS_BBCS"  << endl;
+  h_FVTN_BBCS[4] = (TH1D*)fSeyoung_pp->Get(Form("h_FVTN_BBCS_C%d",0));
+  h_FVTN_FVTS[4] = (TH1D*)fSeyoung_pp->Get(Form("h_FVTN_FVTS_C%d",0));
+  h_FVTS_BBCS[4] = (TH1D*)fSeyoung_pp->Get(Form("h_FVTS_BBCS_C%d",0));
+  if ( h_FVTN_BBCS[4] == NULL ) cout << "uh oh FVTN_BBCS" << endl;
+  if ( h_FVTN_FVTS[4] == NULL ) cout << "uh oh FVTN_FVTS" << endl;
+  if ( h_FVTS_BBCS[4] == NULL ) cout << "uh oh FVTS_BBCS"  << endl;
   // ---
   for ( int ipt = 0; ipt < nptbins-1; ++ipt )
     {
       // ---
-      h_CNT_BBCN[nmultbins][ipt] = (TH1D*)fSeyoung_pp->Get(Form("h_CNT_BBCN_C%d_pT%d",0,ipt));
-      if ( h_CNT_BBCN[nmultbins][ipt] == NULL ) cout << "uh oh CNT_BBCN" << endl;
+      h_CNT_BBCN[4][ipt] = (TH1D*)fSeyoung_pp->Get(Form("h_CNT_BBCN_C%d_pT%d",0,ipt));
+      if ( h_CNT_BBCN[4][ipt] == NULL ) cout << "uh oh CNT_BBCN" << endl;
       // ---
-      h_CNT_BBCS[nmultbins][ipt] = (TH1D*)fSeyoung_pp->Get(Form("h_CNT_BBCS_C%d_pT%d",0,ipt));
-      if ( h_CNT_BBCS[nmultbins][ipt] == NULL ) cout << "uh oh CNT_BBCS" << endl;
+      h_CNT_BBCS[4][ipt] = (TH1D*)fSeyoung_pp->Get(Form("h_CNT_BBCS_C%d_pT%d",0,ipt));
+      if ( h_CNT_BBCS[4][ipt] == NULL ) cout << "uh oh CNT_BBCS" << endl;
       // ---
-      h_CNT_FVTN[nmultbins][ipt] = (TH1D*)fSeyoung_pp->Get(Form("h_CNT_FVTN_C%d_pT%d",0,ipt));
-      if ( h_CNT_FVTN[nmultbins][ipt] == NULL ) cout << "uh oh CNT_FVTN" << endl;
+      h_CNT_FVTN[4][ipt] = (TH1D*)fSeyoung_pp->Get(Form("h_CNT_FVTN_C%d_pT%d",0,ipt));
+      if ( h_CNT_FVTN[4][ipt] == NULL ) cout << "uh oh CNT_FVTN" << endl;
       // ---
-      h_CNT_FVTS[nmultbins][ipt] = (TH1D*)fSeyoung_pp->Get(Form("h_CNT_FVTS_C%d_pT%d",0,ipt));
-      if ( h_CNT_FVTS[nmultbins][ipt] == NULL ) cout << "uh oh CNT_FVTS" << endl;
+      h_CNT_FVTS[4][ipt] = (TH1D*)fSeyoung_pp->Get(Form("h_CNT_FVTS_C%d_pT%d",0,ipt));
+      if ( h_CNT_FVTS[4][ipt] == NULL ) cout << "uh oh CNT_FVTS" << endl;
     }
 
   cout << "Now doing with pp baseline!  If you don't see an \"uh oh\" then all histograms have been pulled, now processing" << endl;
