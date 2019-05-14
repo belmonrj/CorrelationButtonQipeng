@@ -45,6 +45,7 @@ class NonFlowSubtractor {
     static int m_nhar_LM;
     static int m_nhar_HM;
     static TH1F* m_hist_LMtemp; // histogram tempalte for LM
+    static TH1F* m_hist_HMtemp; // histogram tempalte for HM
     static TH1F* m_hist_LMtemp_bulk; // histogram tempalte for LM of bulk-bulk correlation
 
   public:
@@ -69,6 +70,7 @@ class NonFlowSubtractor {
     std::vector<string> m_parName_HM;
 
     std::string _formula_LM;
+    std::string _formula_LM_ZYAM;
     std::string _formula;
     double m_dphiRangeLow;
     double m_dphiRangeHigh;
@@ -81,6 +83,7 @@ class NonFlowSubtractor {
     void init();
     void setDebug (bool _debug = true) { m_debug = _debug; }
     void setFixLM (bool _fix = true) { m_fixLM = _fix; }
+    void setFitPrintLevel (int _level) { m_fitPrintLevel = _level; }
 
     // interface for using AnaConfig classess
     // may be useless for other users
@@ -100,6 +103,7 @@ class NonFlowSubtractor {
     //---------------------------------
     // uncorrected version
     subResult templateFit(TH1* hist_LM, TH1* hist_HM);
+    subResult referenceFit(TH1* hist_LM, TH1* hist_HM); // duplication of template fit with modification to parameterization and names
 
     // corrected version with non-zeor hist_LM2
     subResult templateFit(TH1* hist_LM, TH1* hist_HM, TH1* hist_LM2);
@@ -108,9 +112,14 @@ class NonFlowSubtractor {
     subResult templateFit(TH1* hist_LM, TH1* hist_HM, float cn_LM, float cn_LM_error);
 
     // using hist_LM as template instead of fitting it
-    // steal from Soumya
     subResult templateHistFit(TH1* hist_LM, TH1* hist_HM);
-    subResult templateHistFit(TH1* hist_LM, TH1* hist_LM_bulk, TH1* hist_HM);
+    subResult templateHistFit(TH1* hist_LM, TH1* hist_HM, TH1* hist_LM2);
+    subResult templateHistFit(TH1* hist_LM, TH1* hist_HM, float cn_LM, float cn_LM_error);
+
+    // old methods
+    // might be needed for future development
+    subResult templateHistFit2(TH1* hist_LM, TH1* hist_HM);
+    subResult templateHistFit2(TH1* hist_LM, TH1* hist_LM_bulk, TH1* hist_HM);
 
     //---------------------------------
     // peripheral subtraction used by CMS
@@ -141,7 +150,7 @@ class NonFlowSubtractor {
     // Could be used to study the rho in Pythia if the second histogram is not zero
     subResult fourierFit (TH1* hist, TH1* hist_LM = 0);
     // supportin function for template fitting
-    subResult fourierFitLM (TH1* hist);
+    subResult fourierFitLM (TH1* hist, bool _zyam = false);
 
 
     TH1F* getPesudoHist_HM () {return m_hist_pesudo_HM;}
@@ -175,16 +184,18 @@ class NonFlowSubtractor {
     bool plotAtlasHistHM(TCanvas* theCanvas); // small figure
     TH1F* getPullHist() {return m_h_pull;} // get pull for Brain's check
 
-
-    // no support for ZYAM in Atlas method to void confusing for improved fit correction
-    // becomes a support method for running CMS method using ATLAS PTY definition
+    // by default no ZYAM is applied for any method
+    // one could apply ZYAM to low multiplicity reference in the ATLAS method
+    // one could apply ZYAM to LM and HM using CMS method, in case of using ATLAS PTY defintion (projection first, then take ratio)
     void setZYAM (bool _isApplied = true) {m_applyZYAM = _isApplied;}
 
   private:
     // private members for ATLAS tempalte fit
     static double f_periph(double *x, double *par);
+    static double f_periph_zyam(double *x, double *par);
     static double f_ridge (double *x, double *par);
     static double templ   (double *x, double *par);
+    static double templ_zyam   (double *x, double *par);
 
     // LM hist template version
     static double templ_hist   (double *x, double *par);
@@ -192,12 +203,27 @@ class NonFlowSubtractor {
     static double f_periph_hist(double *x, double *par);
     static double f_periph_hist2(double *x, double *par);
 
+    // function for Seyoung's reference fit
+    // for reference, we can use f_periph for now
+    //static double seyoung_periph (double *x, double *par);
+    static double seyoung_templ  (double *x, double *par);
+
+    // function for hist-based template fit
+    static void hist_fcn(int &npar, double *gin, double &f, double *par, int flag);
+
     bool m_fixC1;
     bool m_fixC3;
     bool m_fixC4;
     bool m_applyZYAM;
     bool m_fixLM;
     bool m_plotBulkRef;
+
+    // print level 
+    // 0 = Quiet (Default)
+    // 1 = just fit results (Default in this tool)
+    // 2 = fit results with iterations
+    // 3 = Verbose (additional details of iterations)
+    int m_fitPrintLevel;
 
     // members for toy fit model check
     TH1F* m_hist_pesudo_HM;
@@ -210,6 +236,7 @@ class NonFlowSubtractor {
     TH1F* m_hist_HM;
     TH1F* m_h_pull;
     TH1F* m_h_ridge;
+
 
     TF1* f_LM;
     TF1* f_HM;
@@ -225,6 +252,7 @@ class NonFlowSubtractor {
     TH1F* h_show_periph_bulk;
     TH1F* h_show_HM;
     TH1F* h_chi2_c2;
+
 };
 #endif
 
@@ -233,6 +261,7 @@ class NonFlowSubtractor {
 int NonFlowSubtractor::m_nhar_LM = 4;
 int NonFlowSubtractor::m_nhar_HM = 4;
 TH1F* NonFlowSubtractor::m_hist_LMtemp = 0;
+TH1F* NonFlowSubtractor::m_hist_HMtemp = 0;
 TH1F* NonFlowSubtractor::m_hist_LMtemp_bulk = 0;
 
 
@@ -253,6 +282,9 @@ NonFlowSubtractor :: NonFlowSubtractor() {
 
     m_dphiRangeLow = -0.5*TMath::Pi();
     m_dphiRangeHigh = 1.5*TMath::Pi();
+
+    m_applyZYAM = false;
+    m_fitPrintLevel = 0;
 }
 
 
@@ -272,11 +304,17 @@ void NonFlowSubtractor :: init() {
 
     // for ATLAS method, in case nhar is different for LM and HM
     _formula_LM = "[0] * ( 1 + 2*(";
+    _formula_LM_ZYAM = "[0] * ( 2*(";
     for (int ihar=0; ihar<getNHarLM(); ihar++){
         _formula_LM += Form("[%d]*cos(%d*x)", ihar+1, ihar+1);
-        if (ihar != getNHarLM()-1) _formula_LM += (" + ");
+        _formula_LM_ZYAM += Form("[%d]*cos(%d*x)", ihar+1, ihar+1);
+        if (ihar != getNHarLM()-1) {
+            _formula_LM += (" + ");
+            _formula_LM_ZYAM += (" + ");
+        }
     }
     _formula_LM += (") )");
+    _formula_LM_ZYAM += (") )");
 
 
     if (m_debug) cout << "Fourier function: " << _formula.c_str() << endl << endl;
@@ -336,6 +374,19 @@ double NonFlowSubtractor::f_periph(double *x, double *par) {
 
 
 
+// G^{LM}*(2*_SIGMA(an*cos(n*dphi)))
+// _SIGMA 2*G^{LM}*(a_n*cos(n*dphi))
+double NonFlowSubtractor::f_periph_zyam(double *x, double *par) {
+    double xx = x[0];
+    double value = 0;
+    for (int ihar=0; ihar < getNHarLM(); ihar++) {
+        value += 2.*(par[0])*(par[ihar+1]*TMath::Cos((ihar+1)*xx));
+    }
+    return value;
+}
+
+
+
 // 1+2*Sigma_n(c_n*Cos(n*dphi))
 double NonFlowSubtractor::f_ridge(double *x, double *par) {
     double xx = x[0];
@@ -352,6 +403,26 @@ double NonFlowSubtractor::f_ridge(double *x, double *par) {
 double NonFlowSubtractor::templ(double *x, double *par) {
     double xx = x[0];
     double f = par[getNHar()+getNHarLM()+1]*f_periph(x, par) + par[getNHarLM()+getNHar()+2]*f_ridge(x, &par[getNHarLM()+1]);
+    return f;
+}
+
+
+
+// F*f_periph + G^{HM}*f_ridge + (G^{HM} - F * G^{LM})
+double NonFlowSubtractor::seyoung_templ(double *x, double *par) {
+    double xx = x[0];
+    double f = par[getNHar()+getNHarLM()+1]*f_periph(x, par)  //F
+             + par[getNHarLM()+getNHar()+2]*f_ridge(x, &par[getNHarLM()+1]) // G{HM}
+             + par[getNHarLM()+getNHar()+2] - par[getNHar()+getNHarLM()+1]*par[0];
+    return f;
+}
+
+
+
+// F*f_periph + (G^{HM} - F*G^{LM})*f_ridge
+double NonFlowSubtractor::templ_zyam(double *x, double *par) {
+    double xx = x[0];
+    double f = par[getNHar()+getNHarLM()+1]*f_periph_zyam(x, par) + par[getNHarLM()+getNHar()+2]*f_ridge(x, &par[getNHarLM()+1]);
     return f;
 }
 
@@ -389,4 +460,18 @@ double NonFlowSubtractor::f_periph_hist2(double *x, double *par) {
                     + (1-par[2]) * m_hist_LMtemp_bulk->GetBinContent(m_hist_LMtemp_bulk->FindBin(xx))
                        ) + par[1] ;
     return f;
+}
+
+
+void NonFlowSubtractor::hist_fcn(int &npar, double *gin, double &f, double *par, int flag) {
+    double chisq = 0;
+    double delta;
+    for (int i=1; i<=m_hist_HMtemp->GetNbinsX(); i++) {
+        Double_t xvalue = m_hist_HMtemp->GetBinCenter(i);
+        delta  = m_hist_HMtemp->GetBinContent(i) - templ_hist(&xvalue,par);
+        
+        chisq += delta*delta /
+                ( pow(m_hist_HMtemp->GetBinError(i), 2) + pow(par[getNHar()]*m_hist_LMtemp->GetBinError(i), 2) );
+    }
+    f=chisq;
 }

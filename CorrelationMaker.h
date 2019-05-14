@@ -89,7 +89,8 @@ class CorrelationMaker {
 
     // for UPC analysis
     virtual TH1*  MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method = 1, int type = 1);
-    virtual float GetPtMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int type = 1);
+    virtual TH1*  MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, float _add_low, float _add_high, int method = 1, int type = 1);
+    virtual float GetPtMean  (float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int type = 1);
     virtual float GetMultMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int type = 1);
 
     virtual TH2* Make2DCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method = 1);
@@ -806,6 +807,309 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
 
     return hphi;
 }
+
+
+
+TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, float _add_low, float _add_high, int method, int type) {
+
+    TH2D* h1 = 0;
+    TH2D* h2 = 0;
+
+    string path_sig = m_anaConfig->getCorrHistPathSame();
+    string path_mix = m_anaConfig->getCorrHistPathMix();
+
+    if (m_debug) cout << "Merging the following slices" << endl;
+    int index_Nch_low = 0;
+    int index_Nch_high = 0;
+    for (int iNch=1; iNch<m_anaConfig->getInputMultiBinning()->GetXaxis()->GetNbins() + 1; iNch++){
+        if (m_anaConfig->getInputMultiBinning()->GetXaxis()->GetBinLowEdge(iNch) == _Nch_low)  index_Nch_low  = iNch - 1; 
+        if (m_anaConfig->getInputMultiBinning()->GetXaxis()->GetBinUpEdge(iNch)  == _Nch_high) index_Nch_high = iNch - 1; 
+    }
+
+
+    int index_pt_low = 0;
+    int index_pt_high = 0;
+    for (int ipt=1; ipt<m_anaConfig->getInputPtBinning()->GetXaxis()->GetNbins() + 1; ipt++){
+        if (m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) == _pt_low)  index_pt_low  = ipt - 1; 
+        if (m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  == _pt_high) index_pt_high = ipt - 1; 
+    }
+    if (m_debug) {
+        cout << "index_Nch_low = " << index_Nch_low << ",\tindex_Nch_high = " << index_Nch_high << endl;
+        cout << "index_pt_low  = " << index_pt_low << ", \tindex_pt_high  = " << index_pt_high << endl;
+    }
+
+
+    int index_add_low = 0;
+    int index_add_high = 0;
+    for (int iadd=1; iadd<m_anaConfig->getInputThirdBinning()->GetXaxis()->GetNbins() + 1; iadd++){
+        if (m_anaConfig->getInputThirdBinning()->GetXaxis()->GetBinLowEdge(iadd) == _add_low)  index_add_low  = iadd - 1; 
+        if (m_anaConfig->getInputThirdBinning()->GetXaxis()->GetBinUpEdge(iadd)  == _add_high) index_add_high = iadd - 1; 
+    }
+
+
+    m_anaConfig->inputFile()->cd();
+    TH3* h2_nsig = (TH3*)gDirectory->Get(m_anaConfig->getTrigYieldHistName().c_str());
+    if (!h2_nsig) cout << "Cannot retrieve yield hitogram for PTY calculation" << endl;
+    if (m_debug) {
+        cout << "pt binning of h2_nsig: " << endl;
+        int ix = 1;
+        for (; ix < h2_nsig->GetNbinsX()+1; ix++) {
+            cout << h2_nsig->GetXaxis()->GetBinLowEdge(ix) << ", ";
+        }
+        cout << h2_nsig->GetXaxis()->GetBinUpEdge(ix-1) << endl;
+
+        cout << "Multiplicity binning of h2_nsig: " << endl;
+        ix = 1;
+        for (; ix < h2_nsig->GetNbinsY()+1; ix++) {
+            cout << h2_nsig->GetYaxis()->GetBinLowEdge(ix) << ", ";
+        }
+        cout << h2_nsig->GetYaxis()->GetBinUpEdge(ix-1) << endl;
+    }
+
+    m_anaConfig->inputFile()->cd();
+    float nsig = 0;
+    for (int iNch=index_Nch_low; iNch<index_Nch_high+1; iNch++) {
+        for (int ipt=index_pt_low; ipt<index_pt_high+1; ipt++) {
+            for (int iadd=index_add_low; iadd<index_add_high+1; iadd++) {
+
+                // example names
+                //h_deta_dphi_same_Mq8_ptq7_Sq15_Pq1
+                //h2_deta_dphi_mixed_Mq8_ptq7_Sq15_tq0_Pq1
+	            TH2D* htemp_1 = (TH2D*)gDirectory->Get(Form("%sMq%d_ptq%d_Sq%d_Pq%d", path_sig.c_str(), iNch, ipt, iadd, type));
+	            TH2D* htemp_2 = (TH2D*)gDirectory->Get(Form("%sMq%d_ptq%d_Sq%d_tq0_Pq%d",path_mix.c_str(),iNch, ipt, iadd, type));
+
+                // Error correction
+                // for double counting trig-asso pairs
+                if (m_runStatCorr) {
+                //if (0) {
+                    if (  m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  <= m_anaConfig->getAssoPtHigh()
+                       && m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) >= m_anaConfig->getAssoPtLow() ) {
+
+                        /*
+                        float _nEvt = 1; // to be updated when nEvt is available from Blair
+
+                        // error correction for double counting based on effective sample size
+                        float _Neff_trig = pow(h2_nsig->GetBinContent(ipt+1, iNch+1)/h2_nsig->GetBinError(ipt+1, iNch+1), 2)/_nEvt;
+                        //float _Neff_trig = h2_nsig->GetBinContent(ipt+1, iNch+1)/_nEvt;
+                        float _Neff_pair_same  = htemp_1->GetEffectiveEntries()/_nEvt;
+                        float _Ncorr_pair_same = _Neff_pair_same - 0.5*_Neff_trig*(_Neff_trig-1);
+                        float _errorScale_same = sqrt(_Neff_pair_same/_Ncorr_pair_same);
+                        if (m_debug) {
+                            cout << "Running the error correction: " << endl; 
+                            cout << "Raw effective size: " << _Neff_pair_same 
+                                 << ", trigger particle effective size: " << _Neff_trig
+                                 << ", Corrected effective size: " << _Ncorr_pair_same
+                                 << ", Error correction scale " << _errorScale_same << endl;
+                        } 
+                        // mixed event error corrections
+                        // not sure how useful they are
+                        float _Neff_pair_mix  = htemp_1->GetEffectiveEntries()/_nEvt;
+                        float _Ncorr_pair_mix = _Neff_pair_mix - 0.5*m_mixDepth*_Neff_trig*(_Neff_trig-1);
+                        float _errorScale_mix = sqrt(_Neff_pair_mix/_Ncorr_pair_mix);
+                        */
+
+                        for (int xbin=1; xbin<htemp_1->GetNbinsX()+1; xbin++) {
+                            for (int ybin=1; ybin<htemp_1->GetNbinsY()+1; ybin++) {
+                                htemp_1->SetBinError(xbin, ybin, htemp_1->GetBinError(xbin,ybin)*sqrt(2));
+                                htemp_2->SetBinError(xbin, ybin, htemp_2->GetBinError(xbin,ybin)*sqrt(2));
+                            }
+                        }
+                    }
+                }
+
+                nsig += h2_nsig->GetBinContent(ipt+1, iNch+1, iadd+1);
+                //cout << Form("%sMq%d_ptq%d_Pq%d",path_sig.c_str(),iNch, ipt, type) << endl;
+                //cout << "\tnsig = " <<  h2_nsig->GetBinContent(ipt+1, iNch+1) << endl;
+                //htemp_1->Print();
+                //cout << "-------------" << endl;
+
+	            if (iNch==index_Nch_low && ipt==index_pt_low) {
+	                h1 = (TH2D*) htemp_1->Clone(Form("h1_Nch%d_%d_pt%d_pt%d", index_Nch_low, index_Nch_high, index_pt_low, index_pt_high));
+	                h2 = (TH2D*) htemp_2->Clone(Form("h2_Nch%d_%d_pt%d_pt%d", index_Nch_low, index_Nch_high, index_pt_low, index_pt_high));
+	            } else {
+                    h1->Add(htemp_1);
+                    h2->Add(htemp_2);
+	            }
+
+                //double _width1 = m_anaConfig->getCorrEtaInterval();
+                //double _width2 = h1->GetXaxis()->GetBinWidth(1);
+                //if (_width2 != _width1) {
+                //    cout << "Input bin width = " << h1->GetXaxis()->GetBinWidth(1) << endl;
+                //    cout << "tool configuration = " << m_anaConfig->getCorrEtaInterval() << endl;
+                //}
+
+	            delete htemp_1;
+	            delete htemp_2;
+                if (m_debug) {
+                    cout << "pt: " << h2_nsig->GetXaxis()->GetBinLowEdge(ipt+1) << " ~ " << h2_nsig->GetXaxis()->GetBinUpEdge(ipt+1) << endl;
+                    cout << "nch: " << h2_nsig->GetYaxis()->GetBinLowEdge(iNch+1) << " ~ " << h2_nsig->GetYaxis()->GetBinUpEdge(iNch+1) << endl;
+                    cout << "gap: " << h2_nsig->GetZaxis()->GetBinLowEdge(iadd+1) << " ~ " << h2_nsig->GetZaxis()->GetBinUpEdge(iadd+1) << endl;
+	                cout << "pt index = " << ipt << ", Nch index = " << iNch << ", gap index = " << iadd << endl;
+	                cout << "ntrig = " << h2_nsig->GetBinContent(ipt+1, iNch+1) << endl;
+                }
+            }
+        }
+    }
+
+    TH1* hphi;
+    if (m_debug) cout << "Merged same event entries: " << h1->GetEntries()/1e6 << "M" << endl;
+    if (m_h1_sig) {delete m_h1_sig; m_h1_sig = 0;}
+    if (m_h1_mix) {delete m_h1_mix; m_h1_mix = 0;}
+
+    // nbins to project
+    int nbins_low  = 0.00001 + (m_jetEtaIndexLow-1) - m_etaBinIndexLow + 1;
+    int nbins_high = 0.00001 + m_etaBinIndexHigh - (m_jetEtaIndexHigh+1) + 1;
+
+    if (nbins_low != nbins_high) cout << nbins_low << ",\t " << nbins_high << endl;
+    if (m_debug) {
+        cout << endl;
+        cout << "Debug the gap index determination: " << endl;
+
+        cout << m_etaBinIndexLow << ",\t" << m_jetEtaIndexLow -1 
+             << " <==> " << h1->GetXaxis()->GetBinLowEdge(0.00001 + m_etaBinIndexLow) << ",\t" << h1->GetXaxis()->GetBinUpEdge(0.00001 + m_jetEtaIndexLow -1) << endl;
+        cout << m_jetEtaIndexHigh+1 << ",\t" << m_etaBinIndexHigh
+             << " <==> " << h1->GetXaxis()->GetBinLowEdge(0.00001 + m_jetEtaIndexHigh+1) << ",\t" << h1->GetXaxis()->GetBinUpEdge(0.00001 + m_etaBinIndexHigh) << endl;
+        cout << "\tMerged Nbins negative side =  " << nbins_low << ", positive side =  " << nbins_high << endl;
+        cout << endl;
+    }
+
+    if (method == 1) {
+        // ATLAS style mixed event normalization
+        // make 1D project of signal and mix first
+        // then take ratio of two 1D hist
+
+        // Make projections first
+        // since we are converting float index to int index
+        // +0.00001 to avoid fluctuations in C++
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+
+        float int_S = m_h1_sig->Integral();
+
+        hphi = (TH1*)m_h1_sig->Clone(Form("_hphi"));
+        hphi->Divide(m_h1_mix);
+
+        float int_C = hphi->Integral();
+        float K = int_S / int_C;
+        if (m_debug) {
+            cout << "int_S = " << int_S << endl;
+            cout << "int_C = " << int_C << endl;
+        }
+        hphi->Scale(K/nsig, "width"); //per trigger & per deltaPhi yield
+
+    } else if (method == 2) {
+        // ATLAS style mixed event normalization
+        // take 2D ratio, then project to 1D
+        
+        // start with N_{pair}
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        float int_S = m_h1_sig->Integral();
+
+        h1->Scale(1./h1->Integral());
+        h2->Scale(1./h2->Integral());
+        TH2D* h_correlation = (TH2D*)h1->Clone();
+        h_correlation->Divide(h2);
+
+        hphi    = h_correlation->ProjectionY(Form("h_phi_Nch%d", index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e");
+        hphi->Add(h_correlation->ProjectionY(Form("h_phi2_Nch%d",index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh, "e"));
+
+        float int_C = hphi->Integral();
+        float K = int_S / int_C;
+        hphi->Scale(K/nsig, "width"); //per trigger & per deltaPhi yield
+
+    } else if (method == 3) { 
+        // CMS style mixed event normalization
+        // make 1D project of signal and mix first
+        // then take ratio of two 1D hist
+        h1->Scale(1./nsig, "width");
+        h2->Scale(1., "width");
+        int bin_00 = h2->FindBin(0,0);
+        float content_00 = h2->GetBinContent(bin_00);
+        h2->Scale( 1./content_00 );
+
+        // Make projections first
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        m_h1_mix    = h2->ProjectionY(Form("h_mix_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_mix->Add(h2->ProjectionY(Form("h_mix_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+
+        m_h1_sig->Scale(1./(nbins_low + nbins_high));
+        m_h1_mix->Scale(1./(nbins_low + nbins_high));
+
+        hphi = (TH1*)m_h1_sig->Clone(Form("_hphi"));
+        hphi->Divide(m_h1_mix);
+    } else if (method == 4) {
+        // CMS style mixed event normalization
+        // take 2D ratio, then project to 1D
+        h1->Scale(1./nsig, "width");
+        h2->Scale(1., "width");
+        int bin_00 = h2 ->FindBin(0,0);
+        float content_00 = h2->GetBinContent(bin_00);
+        h2->Scale( 1./content_00 );
+        TH2D* h_correlation = (TH2D*)h1->Clone();
+        h_correlation->Divide(h2);
+
+        hphi    = h_correlation->ProjectionY(Form("h_sig_phi_Nch%d", index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e");
+        hphi->Add(h_correlation->ProjectionY(Form("h_sig_phi2_Nch%d",index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh, "e"));
+        hphi->Scale(1./(nbins_low + nbins_high)); 
+        
+    } else if (method == 5) {
+        // no mixing applied
+        // copied from method 1
+
+        // Make projections first
+        
+        if (m_debug) { 
+            cout << "Integral before projection: " << h1->Integral() << endl;
+        }
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        if (m_debug) { 
+            cout << "Integral after projection: " << m_h1_sig->Integral() << endl;
+        }
+
+        hphi = (TH1*)m_h1_sig->Clone(Form("_hphi"));
+        hphi->Scale(1./nsig, "width"); //per trigger & per deltaPhi yield
+
+        if (m_debug) { 
+            cout << "nsig = " << nsig << endl;
+            cout << "per trigger yield = " << hphi->Integral("width") << endl;
+        }
+
+    } else {
+        cout << "method is not supported, please choose from 1~3" << endl;
+    }
+
+    if (m_debug) cout << "------------------------------------------" << endl;
+    delete h1;
+    delete h2;
+
+    hphi->Rebin(m_rebin);
+    hphi->Scale(1./m_rebin);
+    hphi->SetName(Form("h_pty_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.1fto%.1f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+
+    if (m_h1_sig) {
+        m_h1_sig->Rebin(m_rebin);
+        //m_h1_sig->Scale(1./m_rebin);
+        m_h1_sig->Scale(1./m_h1_sig->Integral());
+        m_h1_sig->SetName(Form("h_sig_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.1fto%.1f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+    }
+    
+    if (m_h1_mix){
+        m_h1_mix->Rebin(m_rebin);
+        //m_h1_mix->Scale(1./m_rebin);
+        m_h1_mix->Scale(1./m_h1_mix->Integral());
+        m_h1_mix->SetName(Form("h_mix_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.1fto%.1f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+    }
+
+    return hphi;
+}
+
 
 
 
