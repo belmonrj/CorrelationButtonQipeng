@@ -14,8 +14,12 @@ void arguments(int,int,int, const char*);
 
 void newplot_pAu()
 {
+  arguments(index_CNT_BBCN,index_CNT_BBCS,index_BBCN_BBCS,"CNT_BBCN_BBCS");
   arguments(index_CNT_FVTN,index_CNT_FVTS,index_FVTN_FVTS,"CNT_FVTN_FVTS");
   arguments(index_CNT_BBCS,index_CNT_FVTS,index_FVTS_BBCS,"CNT_BBCS_FVTS");
+  arguments(index_CNT_BBCS,index_CNT_FVTN,index_FVTN_BBCS,"CNT_BBCS_FVTN");
+  arguments(index_CNT_BBCN,index_CNT_FVTN,index_BBCN_FVTN,"CNT_BBCN_FVTN");
+  arguments(index_CNT_BBCN,index_CNT_FVTS,index_BBCN_FVTS,"CNT_BBCN_FVTS");
 }
 
 void arguments(int indexA, int indexB, int indexC, const char* name)
@@ -51,6 +55,7 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
                           << v22subRZ[i] << " " << ev22subRZ[i] << " "
                           << v22subR[i] << " " << ev22subR[i] << endl;
     }
+  fin.close();
 
   double c2_raw[nptbins];
   double ec2_raw[nptbins];
@@ -74,8 +79,15 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
   double ec2_subR[nptbins];
   double ptvalues[nptbins] = {0.35,0.7,1.2,1.7,2.35,3.5};
   double a,b,c,ea,eb,ec,c2,ec2;
+  // ---
+  char* foutname;
+  sprintf(foutname,"data_%s.txt",name);
+  cout << "foutname is " << foutname << endl;
+  ofstream fout(foutname);
+  // ---
   for ( int i = 0; i < nptbins; ++i )
     {
+      fout << ptvalues[i] << " ";
       // --- raw
       a = v22raw[indexA+i];
       b = v22raw[indexB+i];
@@ -89,8 +101,11 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
       ec2_raw[i] = ec2;
       // --- calculate the v2
       if ( c2_raw[i] >= 0 ) v2_raw[i] = sqrt(c2_raw[i]);
-      else v2_raw[i] = sqrt(-c2_raw[i]);
+      else v2_raw[i] = -sqrt(-c2_raw[i]);
       ev2_raw[i] = ec2_raw[i]/(2*v2_raw[i]);
+      if ( ev2_raw[i] < 0 ) ev2_raw[i] *= -1;
+      if ( ev2_raw[i] > 1 ) ev2_raw[i] = 0;
+      fout << v2_raw[i] << " " << ev2_raw[i] << " ";
       // --- subA
       a = v22subA[indexA+i];
       b = v22subA[indexB+i];
@@ -103,8 +118,11 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
       c2_subA[i] = c2;
       ec2_subA[i] = ec2;
       if ( c2_subA[i] >= 0 ) v2_subA[i] = sqrt(c2_subA[i]);
-      else v2_subA[i] = sqrt(-c2_subA[i]);
+      else v2_subA[i] = -sqrt(-c2_subA[i]);
       ev2_subA[i] = ec2_subA[i]/(2*v2_subA[i]);
+      if ( ev2_subA[i] < 0 ) ev2_subA[i] *= -1;
+      if ( ev2_subA[i] > 1 ) ev2_subA[i] = 0;
+      fout << v2_subA[i] << " " << ev2_subA[i] << " ";
       // --- subAZ
       a = v22subAZ[indexA+i];
       b = v22subAZ[indexB+i];
@@ -117,8 +135,11 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
       c2_subAZ[i] = c2;
       ec2_subAZ[i] = ec2;
       if ( c2_subAZ[i] >= 0 ) v2_subAZ[i] = sqrt(c2_subAZ[i]);
-      else v2_subAZ[i] = sqrt(-c2_subAZ[i]);
+      else v2_subAZ[i] = -sqrt(-c2_subAZ[i]);
       ev2_subAZ[i] = ec2_subAZ[i]/(2*v2_subAZ[i]);
+      if ( ev2_subAZ[i] < 0 ) ev2_subAZ[i] *= -1;
+      if ( ev2_subAZ[i] > 1 ) ev2_subAZ[i] = 0;
+      fout << v2_subAZ[i] << " " << ev2_subAZ[i] << " ";
       // --- subRZ
       a = v22subRZ[indexA+i];
       b = v22subRZ[indexB+i];
@@ -133,6 +154,9 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
       if ( c2_subRZ[i] >= 0 ) v2_subRZ[i] = sqrt(c2_subRZ[i]);
       else v2_subRZ[i] = sqrt(-c2_subRZ[i]);
       ev2_subRZ[i] = ec2_subRZ[i]/(2*v2_subRZ[i]);
+      if ( ev2_subRZ[i] < 0 ) ev2_subRZ[i] *= -1;
+      if ( ev2_subRZ[i] > 1 ) ev2_subRZ[i] = 0;
+      fout << v2_subRZ[i] << " " << ev2_subRZ[i] << " ";
       // --- subR
       a = v22subR[indexA+i];
       b = v22subR[indexB+i];
@@ -145,9 +169,13 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
       c2_subR[i] = c2;
       ec2_subR[i] = ec2;
       if ( c2_subR[i] >= 0 ) v2_subR[i] = sqrt(c2_subR[i]);
-      else v2_subR[i] = sqrt(-c2_subR[i]);
+      else v2_subR[i] = -sqrt(-c2_subR[i]);
       ev2_subR[i] = ec2_subR[i]/(2*v2_subR[i]);
+      if ( ev2_subR[i] < 0 ) ev2_subR[i] *= -1;
+      if ( ev2_subR[i] > 1 ) ev2_subR[i] = 0;
+      fout << v2_subR[i] << " " << ev2_subR[i] << endl;
     }
+  fout.close();
 
   TCanvas* c1 = new TCanvas("c1","");
 
@@ -155,63 +183,63 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
   tge_c2_raw->SetMarkerColor(kBlack);
   tge_c2_raw->SetMarkerStyle(kFullCircle);
   tge_c2_raw->Draw("ap");
-  if ( verbose ) c1->Print(Form("syh_c2_%s_raw.png",name));
+  if ( verbose ) c1->Print(Form("PlotFigs/syh_c2_%s_raw.png",name));
 
   TGraphErrors* tge_v2_raw = new TGraphErrors(nptbins,ptvalues,v2_raw,0,ev2_raw);
   tge_v2_raw->SetMarkerColor(kBlack);
   tge_v2_raw->SetMarkerStyle(kFullCircle);
   tge_v2_raw->Draw("ap");
-  if ( verbose ) c1->Print(Form("syh_v2_%s_raw.png",name));
+  if ( verbose ) c1->Print(Form("PlotFigs/syh_v2_%s_raw.png",name));
 
   TGraphErrors* tge_c2_subA = new TGraphErrors(nptbins,ptvalues,c2_subA,0,ec2_subA);
   tge_c2_subA->SetMarkerColor(kBlack);
   tge_c2_subA->SetMarkerStyle(kOpenCircle);
   tge_c2_subA->Draw("ap");
-  if ( verbose ) c1->Print(Form("syh_c2_%s_subA.png",name));
+  if ( verbose ) c1->Print(Form("PlotFigs/syh_c2_%s_subA.png",name));
 
   TGraphErrors* tge_v2_subA = new TGraphErrors(nptbins,ptvalues,v2_subA,0,ev2_subA);
   tge_v2_subA->SetMarkerColor(kBlack);
   tge_v2_subA->SetMarkerStyle(kOpenCircle);
   tge_v2_subA->Draw("ap");
-  if ( verbose ) c1->Print(Form("syh_v2_%s_subA.png",name));
+  if ( verbose ) c1->Print(Form("PlotFigs/syh_v2_%s_subA.png",name));
 
   TGraphErrors* tge_c2_subAZ = new TGraphErrors(nptbins,ptvalues,c2_subAZ,0,ec2_subAZ);
   tge_c2_subAZ->SetMarkerColor(kBlack);
   tge_c2_subAZ->SetMarkerStyle(kOpenSquare);
   tge_c2_subAZ->Draw("ap");
-  if ( verbose ) c1->Print(Form("syh_c2_%s_subAZ.png",name));
+  if ( verbose ) c1->Print(Form("PlotFigs/syh_c2_%s_subAZ.png",name));
 
   TGraphErrors* tge_v2_subAZ = new TGraphErrors(nptbins,ptvalues,v2_subAZ,0,ev2_subAZ);
   tge_v2_subAZ->SetMarkerColor(kBlack);
   tge_v2_subAZ->SetMarkerStyle(kOpenSquare);
   tge_v2_subAZ->Draw("ap");
-  if ( verbose ) c1->Print(Form("syh_v2_%s_subAZ.png",name));
+  if ( verbose ) c1->Print(Form("PlotFigs/syh_v2_%s_subAZ.png",name));
 
   TGraphErrors* tge_c2_subRZ = new TGraphErrors(nptbins,ptvalues,c2_subRZ,0,ec2_subRZ);
   tge_c2_subRZ->SetMarkerColor(kBlack);
   tge_c2_subRZ->SetMarkerStyle(kOpenCross);
   tge_c2_subRZ->Draw("ap");
-  if ( verbose ) c1->Print(Form("syh_c2_%s_subRZ.png",name));
+  if ( verbose ) c1->Print(Form("PlotFigs/syh_c2_%s_subRZ.png",name));
 
   TGraphErrors* tge_v2_subRZ = new TGraphErrors(nptbins,ptvalues,v2_subRZ,0,ev2_subRZ);
   tge_v2_subRZ->SetMarkerColor(kBlack);
   tge_v2_subRZ->SetMarkerStyle(kOpenCross);
   tge_v2_subRZ->Draw("ap");
-  if ( verbose ) c1->Print(Form("syh_v2_%s_subRZ.png",name));
+  if ( verbose ) c1->Print(Form("PlotFigs/syh_v2_%s_subRZ.png",name));
 
   TGraphErrors* tge_c2_subR = new TGraphErrors(nptbins,ptvalues,c2_subR,0,ec2_subR);
   tge_c2_subR->SetMarkerColor(kBlack);
   tge_c2_subR->SetMarkerStyle(kOpenDiamond);
   tge_c2_subR->SetMarkerSize(2.5);
   tge_c2_subR->Draw("ap");
-  if ( verbose ) c1->Print(Form("syh_c2_%s_subR.png",name));
+  if ( verbose ) c1->Print(Form("PlotFigs/syh_c2_%s_subR.png",name));
 
   TGraphErrors* tge_v2_subR = new TGraphErrors(nptbins,ptvalues,v2_subR,0,ev2_subR);
   tge_v2_subR->SetMarkerColor(kBlack);
   tge_v2_subR->SetMarkerStyle(kOpenDiamond);
   tge_v2_subR->SetMarkerSize(2.5);
   tge_v2_subR->Draw("ap");
-  if ( verbose ) c1->Print(Form("syh_v2_%s_subR.png",name));
+  if ( verbose ) c1->Print(Form("PlotFigs/syh_v2_%s_subR.png",name));
 
   double seyoungdata_CNT_BBCS_FVTS_raw[nptbins] = {0.01999,0.04210,0.07368,0.09789,0.12,0.14210};
   double seyoungdata_CNT_FVTN_FVTS_raw[nptbins] = {0.03368,0.06421,0.11157,0.15263,0.20210,0.28947};
@@ -223,6 +251,7 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
   double ppg191_sd[13] = {0.0039422,0.0060338,0.0078612,0.0117858,0.0139513,0.0162361,0.0205304,0.0219035,0.0257567,0.0280336,0.0295129,0.0328588,0.0326475};
 
   TGraphAsymmErrors* tgae_ppg191 = new TGraphAsymmErrors(13,ppg191_pt,ppg191_v2,0,0,ppg191_sd,ppg191_su);
+  tgae_ppg191->SetLineWidth(2);
   tgae_ppg191->SetLineColor(kRed);
   tgae_ppg191->SetFillColorAlpha(kRed,0.35);
 
@@ -262,17 +291,17 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
   line->SetLineWidth(2);
   line->SetLineStyle(2);
   line->Draw();
-  c1->Print(Form("syh_v2_%s.png",name));
+  c1->Print(Form("PlotFigs/syh_v2_%s.png",name));
   tge_v2_subA->Draw("p");
   if ( is_CNT_FVTN_FVTS ) tg_sy_CNT_FVTN_FVTS_sub->Draw("l");
   leg->AddEntry(tge_v2_subA,"sub v_{2} (ATLAS)","p");
-  c1->Print(Form("syh_v2_%s_sub1.png",name));
+  c1->Print(Form("PlotFigs/syh_v2_%s_sub1.png",name));
   tge_v2_subAZ->Draw("p");
   leg->AddEntry(tge_v2_subAZ,"sub v_{2} (ATLAS, ZYAM)","p");
-  c1->Print(Form("syh_v2_%s_sub2.png",name));
+  c1->Print(Form("PlotFigs/syh_v2_%s_sub2.png",name));
   tge_v2_subR->Draw("p");
   leg->AddEntry(tge_v2_subR,"sub v_{2} (Reference)","p");
-  c1->Print(Form("syh_v2_%s_sub3.png",name));
+  c1->Print(Form("PlotFigs/syh_v2_%s_sub3.png",name));
 
   xmin = 0.0;
   xmax = 4.0;
@@ -296,7 +325,7 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
   leg->AddEntry(tge_c2_subR,"sub c_{2} (Reference)","p");
   leg->Draw();
   line->Draw();
-  c1->Print(Form("syh_c2_%s.png",name));
+  c1->Print(Form("PlotFigs/syh_c2_%s.png",name));
 
   delete c1;
   delete leg;
