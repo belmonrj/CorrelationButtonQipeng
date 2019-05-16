@@ -10,14 +10,14 @@ const int index_CNT_BBCS = 12; // 12--17
 const int index_CNT_FVTN = 18; // 18--23
 const int index_CNT_FVTS = 24; // 24--29
 
-TFile* outfile;
+//TFile* outfile;
 
 void arguments(int,int,int, const char*);
 
 void newplot_pAu()
 {
 
-  outfile = new TFile("hdata_pAu_pAulm.root","recreate");
+  //outfile = new TFile("hdata_pAu_pAulm.root","recreate");
 
   arguments(index_CNT_BBCN,index_CNT_BBCS,index_BBCN_BBCS,"CNT_BBCN_BBCS");
   arguments(index_CNT_FVTN,index_CNT_FVTS,index_FVTN_FVTS,"CNT_FVTN_FVTS");
@@ -26,8 +26,8 @@ void newplot_pAu()
   arguments(index_CNT_BBCN,index_CNT_FVTN,index_BBCN_FVTN,"CNT_BBCN_FVTN");
   arguments(index_CNT_BBCN,index_CNT_FVTS,index_BBCN_FVTS,"CNT_BBCN_FVTS");
 
-  outfile->Write();
-  outfile->Close();
+  //outfile->Write();
+  //outfile->Close();
 
 }
 
@@ -96,11 +96,11 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
   // sprintf(foutname,"data_%s.root",name);
   // cout << "foutname is " << foutname << endl;
   //TFile* outfile = new TFile(foutname,"recreate");
-  TH1D* h_v2_raw = new TH1D(Form("h_v2_raw_%s",name),"",nptbins,-0.5,nptbins-0.5);
-  TH1D* h_v2_subA = new TH1D(Form("h_v2_subA_%s",name),"",nptbins,-0.5,nptbins-0.5);
-  TH1D* h_v2_subAZ = new TH1D(Form("h_v2_subAZ_%s",name),"",nptbins,-0.5,nptbins-0.5);
-  TH1D* h_v2_subRZ = new TH1D(Form("h_v2_subRZ_%s",name),"",nptbins,-0.5,nptbins-0.5);
-  TH1D* h_v2_subR = new TH1D(Form("h_v2_subR_%s",name),"",nptbins,-0.5,nptbins-0.5);
+  // TH1D* h_v2_raw = new TH1D(Form("h_v2_raw_%s",name),"",nptbins,-0.5,nptbins-0.5);
+  // TH1D* h_v2_subA = new TH1D(Form("h_v2_subA_%s",name),"",nptbins,-0.5,nptbins-0.5);
+  // TH1D* h_v2_subAZ = new TH1D(Form("h_v2_subAZ_%s",name),"",nptbins,-0.5,nptbins-0.5);
+  // TH1D* h_v2_subRZ = new TH1D(Form("h_v2_subRZ_%s",name),"",nptbins,-0.5,nptbins-0.5);
+  // TH1D* h_v2_subR = new TH1D(Form("h_v2_subR_%s",name),"",nptbins,-0.5,nptbins-0.5);
   // ---
   for ( int i = 0; i < nptbins; ++i )
     {
@@ -123,8 +123,8 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
       if ( ev2_raw[i] < 0 ) ev2_raw[i] *= -1;
       if ( ev2_raw[i] > 1 ) ev2_raw[i] = 0;
       fout << v2_raw[i] << " " << ev2_raw[i] << " ";
-      h_v2_raw->SetBinContent(i+1,v2_raw[i]);
-      h_v2_raw->SetBinError(i+1,ev2_raw[i]);
+      // h_v2_raw->SetBinContent(i+1,v2_raw[i]);
+      // h_v2_raw->SetBinError(i+1,ev2_raw[i]);
       // --- subA
       a = v22subA[indexA+i];
       b = v22subA[indexB+i];
@@ -142,8 +142,8 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
       if ( ev2_subA[i] < 0 ) ev2_subA[i] *= -1;
       if ( ev2_subA[i] > 1 ) ev2_subA[i] = 0;
       fout << v2_subA[i] << " " << ev2_subA[i] << " ";
-      h_v2_subA->SetBinContent(i+1,v2_subA[i]);
-      h_v2_subA->SetBinError(i+1,ev2_subA[i]);
+      // h_v2_subA->SetBinContent(i+1,v2_subA[i]);
+      // h_v2_subA->SetBinError(i+1,ev2_subA[i]);
       // --- subAZ
       a = v22subAZ[indexA+i];
       b = v22subAZ[indexB+i];
@@ -161,8 +161,8 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
       if ( ev2_subAZ[i] < 0 ) ev2_subAZ[i] *= -1;
       if ( ev2_subAZ[i] > 1 ) ev2_subAZ[i] = 0;
       fout << v2_subAZ[i] << " " << ev2_subAZ[i] << " ";
-      h_v2_subAZ->SetBinContent(i+1,v2_subAZ[i]);
-      h_v2_subAZ->SetBinError(i+1,ev2_subAZ[i]);
+      // h_v2_subAZ->SetBinContent(i+1,v2_subAZ[i]);
+      // h_v2_subAZ->SetBinError(i+1,ev2_subAZ[i]);
       // --- subRZ
       a = v22subRZ[indexA+i];
       b = v22subRZ[indexB+i];
@@ -180,8 +180,8 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
       if ( ev2_subRZ[i] < 0 ) ev2_subRZ[i] *= -1;
       if ( ev2_subRZ[i] > 1 ) ev2_subRZ[i] = 0;
       fout << v2_subRZ[i] << " " << ev2_subRZ[i] << " ";
-      h_v2_subRZ->SetBinContent(i+1,v2_subRZ[i]);
-      h_v2_subRZ->SetBinError(i+1,ev2_subRZ[i]);
+      // h_v2_subRZ->SetBinContent(i+1,v2_subRZ[i]);
+      // h_v2_subRZ->SetBinError(i+1,ev2_subRZ[i]);
       // --- subR
       a = v22subR[indexA+i];
       b = v22subR[indexB+i];
@@ -199,21 +199,21 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
       if ( ev2_subR[i] < 0 ) ev2_subR[i] *= -1;
       if ( ev2_subR[i] > 1 ) ev2_subR[i] = 0;
       fout << v2_subR[i] << " " << ev2_subR[i] << endl;
-      h_v2_subR->SetBinContent(i+1,v2_subR[i]);
-      h_v2_subR->SetBinError(i+1,ev2_subR[i]);
+      // h_v2_subR->SetBinContent(i+1,v2_subR[i]);
+      // h_v2_subR->SetBinError(i+1,ev2_subR[i]);
     }
   fout.close();
-  outfile->cd();
-  h_v2_raw->Write();
-  h_v2_subA->Write();
-  h_v2_subAZ->Write();
-  h_v2_subRZ->Write();
-  h_v2_subR->Write();
-  delete  h_v2_raw;
-  delete  h_v2_subA;
-  delete  h_v2_subAZ;
-  delete  h_v2_subRZ;
-  delete  h_v2_subR;
+  // outfile->cd();
+  // h_v2_raw->Write();
+  // h_v2_subA->Write();
+  // h_v2_subAZ->Write();
+  // h_v2_subRZ->Write();
+  // h_v2_subR->Write();
+  // delete  h_v2_raw;
+  // delete  h_v2_subA;
+  // delete  h_v2_subAZ;
+  // delete  h_v2_subRZ;
+  // delete  h_v2_subR;
 
   TCanvas* c1 = new TCanvas("c1","");
 
