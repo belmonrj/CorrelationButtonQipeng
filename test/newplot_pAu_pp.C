@@ -95,7 +95,7 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
   ofstream fout(foutname);
   // sprintf(foutname,"data_%s.root",name);
   // cout << "foutname is " << foutname << endl;
-  TFile* outfile = new TFile(foutname,"recreate");
+  // TFile* outfile = new TFile(foutname,"recreate");
   TH1D* h_v2_raw = new TH1D(Form("h_v2_raw_%s",name),"",nptbins,-0.5,nptbins-0.5);
   TH1D* h_v2_subA = new TH1D(Form("h_v2_subA_%s",name),"",nptbins,-0.5,nptbins-0.5);
   TH1D* h_v2_subAZ = new TH1D(Form("h_v2_subAZ_%s",name),"",nptbins,-0.5,nptbins-0.5);
