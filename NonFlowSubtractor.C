@@ -2194,8 +2194,8 @@ bool NonFlowSubtractor :: plotAtlasLM (TCanvas* theCanvas) {
     m_hist_LM->GetXaxis()->SetTickLength(0.067);
     m_hist_LM->Draw("EX0SAME");
     f_LM->Draw("SAME");
-    cout << f_LM->Eval(0) << endl;
-    cout << endl;
+    //cout << f_LM->Eval(0) << endl;
+    //cout << endl;
     plotMarkerLineText(0.25,0.42, 1.2,1, 24, 1,1,"LM Data", 0.05, true);
     plotMarkerLineText(0.25,0.36, 0, 2, 1, kSpring-6, 3,"LM Fourier Fit", 0.05);
 
