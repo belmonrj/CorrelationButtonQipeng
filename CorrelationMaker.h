@@ -92,8 +92,10 @@ class CorrelationMaker {
     virtual TH1*  MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, float _add_low, float _add_high, int method = 1, int type = 1);
     virtual float GetPtMean  (float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int type = 1);
     virtual float GetMultMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int type = 1);
+    virtual float GetMultMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, float _add_low, float _add_high, int type = 1);
 
     virtual TH2* Make2DCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method = 1);
+    virtual TH2* Make2DCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, float _add_low, float _add_high, int method = 1);
     //virtual TH2* Make2DCorr(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, float _add_low, float _add_high);
     
     void Plot2DCorrelation(TH2* h1, TCanvas* c1);
@@ -520,6 +522,55 @@ float CorrelationMaker::GetMultMean(float _pt_low, float _pt_high, float _Nch_lo
 
 
 
+float CorrelationMaker::GetMultMean(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, float _add_low, float _add_high, int type) {
+
+    TH2D* h1 = 0;
+
+    int index_Nch_low = 0;
+    int index_Nch_high = 0;
+    for (int iNch=1; iNch<m_anaConfig->getInputMultiBinning()->GetXaxis()->GetNbins() + 1; iNch++){
+        if (m_anaConfig->getInputMultiBinning()->GetXaxis()->GetBinLowEdge(iNch) == _Nch_low)  index_Nch_low  = iNch - 1; 
+        if (m_anaConfig->getInputMultiBinning()->GetXaxis()->GetBinUpEdge(iNch)  == _Nch_high) index_Nch_high = iNch - 1; 
+    }
+
+
+    int index_pt_low = 0;
+    int index_pt_high = 0;
+    for (int ipt=1; ipt<m_anaConfig->getInputPtBinning()->GetXaxis()->GetNbins() + 1; ipt++){
+        if (m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) == _pt_low)  index_pt_low  = ipt - 1; 
+        if (m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  == _pt_high) index_pt_high = ipt - 1; 
+    }
+
+    int index_add_low = 0;
+    int index_add_high = 0;
+    for (int iadd=1; iadd<m_anaConfig->getInputThirdBinning()->GetXaxis()->GetNbins() + 1; iadd++){
+        if (m_anaConfig->getInputThirdBinning()->GetXaxis()->GetBinLowEdge(iadd) == _add_low)  index_add_low  = iadd - 1; 
+        if (m_anaConfig->getInputThirdBinning()->GetXaxis()->GetBinUpEdge(iadd)  == _add_high) index_add_high = iadd - 1; 
+    }
+
+    m_anaConfig->inputFile()->cd();
+
+    for (int iNch=index_Nch_low; iNch<index_Nch_high+1; iNch++) {
+        for (int ipt=index_pt_low; ipt<index_pt_high+1; ipt++) {
+            for (int iadd=index_add_low; iadd<index_add_high+1; iadd++) {
+
+	            TH2F* htemp_1 = (TH2F*)gDirectory->Get(Form("h_pt_mult_trig_same_Mq%d_ptq%d_Sq%d_tq0_Pq%d", iNch, ipt, iadd, type));
+
+	            if (iNch==index_Nch_low && ipt==index_pt_low) {
+	                h1 = (TH2D*) htemp_1->Clone(Form("h1_Nch%d_%d_pt%d_pt%d", index_Nch_low, index_Nch_high, index_pt_low, index_pt_high));
+	            } else {
+                    h1->Add(htemp_1);
+	            }
+	            delete htemp_1;
+            }
+        }
+    }
+    return h1->GetMean(2);
+}
+
+
+
+
 TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method, int type) {
 
     TH2D* h1 = 0;
@@ -550,7 +601,10 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
 
     m_anaConfig->inputFile()->cd();
     TH2F* h2_nsig = (TH2F*)gDirectory->Get(m_anaConfig->getTrigYieldHistName().c_str());
+    TH2F* h2_nevt = (TH2F*)gDirectory->Get("h_NeventTrig");
+
     if (!h2_nsig) cout << "Cannot retrieve yield hitogram for PTY calculation" << endl;
+    if (!h2_nevt) cout << "Cannot retrieve Nevt hitogram for PTY calculation" << endl;
     if (m_debug) {
         cout << "pt binning of h2_nsig: " << endl;
         int ix = 1;
@@ -573,25 +627,29 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
         for (int ipt=index_pt_low; ipt<index_pt_high+1; ipt++) {
             //cout << iNch << "\t" << ipt << endl;
 
-            // example names
+            // example histogram names from Blair's file
             //h_deta_dphi_same_Mq4_ptq2_Pq1	
             //h_deta_dphi_same_Mq1_ptq4_Pq0
             //h2_deta_dphi_mixed_Mq4_ptq2_Sq0_tq0_Pq1;1 
 	        TH2D* htemp_1 = (TH2D*)gDirectory->Get(Form("%sMq%d_ptq%d_Pq%d",path_sig.c_str(),iNch, ipt, type));
 	        TH2D* htemp_2 = (TH2D*)gDirectory->Get(Form("%sMq%d_ptq%d_Sq0_tq0_Pq%d",path_mix.c_str(),iNch, ipt, type));
 
+            // event counts
+            // example histogram names from Blair's file
+            // h_pt_mult_trig_same_Mq8_ptq7_Sq0_tq0_Pq1
+	        TH2F* htempt_Nevt = (TH2F*)gDirectory->Get(Form("h_pt_mult_trig_same_Mq%d_ptq%d_Sq0_tq0_Pq%d", iNch, ipt, type));
+
             // Error correction
             // for double counting trig-asso pairs
             if (m_runStatCorr) {
+                // only apply error correction when trigger and associate particle selection overlaps
                 if (  m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  <= m_anaConfig->getAssoPtHigh()
                    && m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) >= m_anaConfig->getAssoPtLow() ) {
 
-                    
-                    float _nEvt = 1; // to be updated when nEvt is available from Blair
+                    float _nEvt = h2_nevt->GetBinContent(ipt+1, iNch+1);
 
                     // error correction for double counting based on effective sample size
                     float _Neff_trig = pow(h2_nsig->GetBinContent(ipt+1, iNch+1)/h2_nsig->GetBinError(ipt+1, iNch+1), 2)/_nEvt;
-                    //float _Neff_trig = h2_nsig->GetBinContent(ipt+1, iNch+1)/_nEvt;
                     float _Neff_pair_same  = htemp_1->GetEffectiveEntries()/_nEvt;
                     float _Ncorr_pair_same = _Neff_pair_same - 0.5*_Neff_trig*(_Neff_trig-1);
                     float _errorScale_same = sqrt(_Neff_pair_same/_Ncorr_pair_same);
@@ -640,6 +698,7 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
 
 	        delete htemp_1;
 	        delete htemp_2;
+            delete htempt_Nevt;
             if (m_debug) {
                 cout << "pt: " << h2_nsig->GetXaxis()->GetBinLowEdge(ipt+1) << " ~ " << h2_nsig->GetXaxis()->GetBinUpEdge(ipt+1) << endl;
                 cout << "nch: " << h2_nsig->GetYaxis()->GetBinLowEdge(iNch+1) << " ~ " << h2_nsig->GetYaxis()->GetBinUpEdge(iNch+1) << endl;
@@ -878,52 +937,28 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
 	            TH2D* htemp_1 = (TH2D*)gDirectory->Get(Form("%sMq%d_ptq%d_Sq%d_Pq%d", path_sig.c_str(), iNch, ipt, iadd, type));
 	            TH2D* htemp_2 = (TH2D*)gDirectory->Get(Form("%sMq%d_ptq%d_Sq%d_tq0_Pq%d",path_mix.c_str(),iNch, ipt, iadd, type));
 
-                // Error correction
-                // for double counting trig-asso pairs
-                if (m_runStatCorr) {
-                //if (0) {
-                    if (  m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  <= m_anaConfig->getAssoPtHigh()
-                       && m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) >= m_anaConfig->getAssoPtLow() ) {
+                if (m_debug) {
+                    cout << "pt: " << h2_nsig->GetXaxis()->GetBinLowEdge(ipt+1) << " ~ " << h2_nsig->GetXaxis()->GetBinUpEdge(ipt+1) << endl;
+                    cout << "nch: " << h2_nsig->GetYaxis()->GetBinLowEdge(iNch+1) << " ~ " << h2_nsig->GetYaxis()->GetBinUpEdge(iNch+1) << endl;
+                    cout << "gap: " << h2_nsig->GetZaxis()->GetBinLowEdge(iadd+1) << " ~ " << h2_nsig->GetZaxis()->GetBinUpEdge(iadd+1) << endl;
+	                cout << "pt index = " << ipt << ", Nch index = " << iNch << ", gap index = " << iadd << endl;
+	                cout << "ntrig = " << h2_nsig->GetBinContent(ipt+1, iNch+1, iadd+1) << endl;
+                    if (m_debug) cout << "same event entries:   " << htemp_1->GetEntries() << endl;
+                    if (m_debug) cout << "same event integral:  " << htemp_1->Integral()   << endl;
+                    if (m_debug) cout << "mixed event entries:  " << htemp_2->GetEntries() << endl;
+                    if (m_debug) cout << "mixed event integral: " << htemp_2->Integral()   << endl;
+                    cout << endl;
+                }
 
-                        /*
-                        float _nEvt = 1; // to be updated when nEvt is available from Blair
-
-                        // error correction for double counting based on effective sample size
-                        float _Neff_trig = pow(h2_nsig->GetBinContent(ipt+1, iNch+1)/h2_nsig->GetBinError(ipt+1, iNch+1), 2)/_nEvt;
-                        //float _Neff_trig = h2_nsig->GetBinContent(ipt+1, iNch+1)/_nEvt;
-                        float _Neff_pair_same  = htemp_1->GetEffectiveEntries()/_nEvt;
-                        float _Ncorr_pair_same = _Neff_pair_same - 0.5*_Neff_trig*(_Neff_trig-1);
-                        float _errorScale_same = sqrt(_Neff_pair_same/_Ncorr_pair_same);
-                        if (m_debug) {
-                            cout << "Running the error correction: " << endl; 
-                            cout << "Raw effective size: " << _Neff_pair_same 
-                                 << ", trigger particle effective size: " << _Neff_trig
-                                 << ", Corrected effective size: " << _Ncorr_pair_same
-                                 << ", Error correction scale " << _errorScale_same << endl;
-                        } 
-                        // mixed event error corrections
-                        // not sure how useful they are
-                        float _Neff_pair_mix  = htemp_1->GetEffectiveEntries()/_nEvt;
-                        float _Ncorr_pair_mix = _Neff_pair_mix - 0.5*m_mixDepth*_Neff_trig*(_Neff_trig-1);
-                        float _errorScale_mix = sqrt(_Neff_pair_mix/_Ncorr_pair_mix);
-                        */
-
-                        for (int xbin=1; xbin<htemp_1->GetNbinsX()+1; xbin++) {
-                            for (int ybin=1; ybin<htemp_1->GetNbinsY()+1; ybin++) {
-                                htemp_1->SetBinError(xbin, ybin, htemp_1->GetBinError(xbin,ybin)*sqrt(2));
-                                htemp_2->SetBinError(xbin, ybin, htemp_2->GetBinError(xbin,ybin)*sqrt(2));
-                            }
-                        }
-                    }
+                if (htemp_1->GetEntries() == 0) {
+	                delete htemp_1;
+	                delete htemp_2;
+                    continue;
                 }
 
                 nsig += h2_nsig->GetBinContent(ipt+1, iNch+1, iadd+1);
-                //cout << Form("%sMq%d_ptq%d_Pq%d",path_sig.c_str(),iNch, ipt, type) << endl;
-                //cout << "\tnsig = " <<  h2_nsig->GetBinContent(ipt+1, iNch+1) << endl;
-                //htemp_1->Print();
-                //cout << "-------------" << endl;
 
-	            if (iNch==index_Nch_low && ipt==index_pt_low) {
+	            if (iNch==index_Nch_low && ipt==index_pt_low && iadd==index_add_low) {
 	                h1 = (TH2D*) htemp_1->Clone(Form("h1_Nch%d_%d_pt%d_pt%d", index_Nch_low, index_Nch_high, index_pt_low, index_pt_high));
 	                h2 = (TH2D*) htemp_2->Clone(Form("h2_Nch%d_%d_pt%d_pt%d", index_Nch_low, index_Nch_high, index_pt_low, index_pt_high));
 	            } else {
@@ -931,28 +966,32 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
                     h2->Add(htemp_2);
 	            }
 
-                //double _width1 = m_anaConfig->getCorrEtaInterval();
-                //double _width2 = h1->GetXaxis()->GetBinWidth(1);
-                //if (_width2 != _width1) {
-                //    cout << "Input bin width = " << h1->GetXaxis()->GetBinWidth(1) << endl;
-                //    cout << "tool configuration = " << m_anaConfig->getCorrEtaInterval() << endl;
-                //}
-
 	            delete htemp_1;
 	            delete htemp_2;
-                if (m_debug) {
-                    cout << "pt: " << h2_nsig->GetXaxis()->GetBinLowEdge(ipt+1) << " ~ " << h2_nsig->GetXaxis()->GetBinUpEdge(ipt+1) << endl;
-                    cout << "nch: " << h2_nsig->GetYaxis()->GetBinLowEdge(iNch+1) << " ~ " << h2_nsig->GetYaxis()->GetBinUpEdge(iNch+1) << endl;
-                    cout << "gap: " << h2_nsig->GetZaxis()->GetBinLowEdge(iadd+1) << " ~ " << h2_nsig->GetZaxis()->GetBinUpEdge(iadd+1) << endl;
-	                cout << "pt index = " << ipt << ", Nch index = " << iNch << ", gap index = " << iadd << endl;
-	                cout << "ntrig = " << h2_nsig->GetBinContent(ipt+1, iNch+1) << endl;
-                }
+            }
+        }
+    }
+
+    // Error correction
+    // for double counting trig-asso pairs
+    // here we simple assume the symmetric trig-asso selection will always be used
+    // so the erorr correction factor is just sqrt(2) to histogram after merging
+    // otherwise, the 2D-like error correction should be applied to each histogram before merging
+    if (m_runStatCorr) {
+        for (int xbin=1; xbin<h1->GetNbinsX()+1; xbin++) {
+            for (int ybin=1; ybin<h1->GetNbinsY()+1; ybin++) {
+                h1->SetBinError(xbin, ybin, h1->GetBinError(xbin,ybin)*sqrt(2));
+                h2->SetBinError(xbin, ybin, h2->GetBinError(xbin,ybin)*sqrt(2));
             }
         }
     }
 
     TH1* hphi;
     if (m_debug) cout << "Merged same event entries: " << h1->GetEntries()/1e6 << "M" << endl;
+    if (m_debug) cout << "Merged same event integral: " << h1->Integral()/1e6 << "M" << endl;
+    if (m_debug) cout << "Merged mixed event entries: " << h2->GetEntries()/1e6 << "M" << endl;
+    if (m_debug) cout << "Merged mixed event integral: " << h2->Integral()/1e6 << "M" << endl;
+
     if (m_h1_sig) {delete m_h1_sig; m_h1_sig = 0;}
     if (m_h1_mix) {delete m_h1_mix; m_h1_mix = 0;}
 
@@ -994,6 +1033,9 @@ TH1* CorrelationMaker::MakeCorrUpc(float _pt_low, float _pt_high, float _Nch_low
         float int_C = hphi->Integral();
         float K = int_S / int_C;
         if (m_debug) {
+            cout << "same integral = " << m_h1_sig->Integral() << endl;
+            cout << "mix  integral = " << m_h1_mix->Integral() << endl;
+            cout << "nsig = " << nsig << endl;
             cout << "int_S = " << int_S << endl;
             cout << "int_C = " << int_C << endl;
         }
@@ -1168,6 +1210,127 @@ TH2* CorrelationMaker::Make2DCorrUpc(float _pt_low, float _pt_high, float _Nch_l
 	        delete htemp_1;
 	        delete htemp_2;
 	        if (m_debug) cout << "pt index = " << ipt << ", Nch index = " << iNch << endl;
+        }
+    }
+
+    TH2* h_correlation = (TH2*) h1->Clone(Form("h2_pty_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.0fto%.0f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
+
+    if (method == 1) {
+        // with mixing correction
+        float int_S = h1->Integral();
+        h1->Scale(1./h1->Integral());
+        h2->Scale(1./h2->Integral());
+        h_correlation->Divide(h2);
+
+        float int_C = h_correlation->Integral();
+        float K = int_S / int_C;
+        if (m_debug) {
+            cout << h_correlation->Integral() << endl;
+            cout << "int_S = " << int_S << endl;
+            cout << "int_C = " << int_C << endl;
+            cout << "K = " << K << endl;
+        }
+        h_correlation->Scale(K/nsig, "width"); //per trigger & per deltaPhi yield 
+
+    } else if (method == 2) {
+        // no mixxing correction
+        h_correlation->Scale(1./nsig, "width"); 
+    } else {
+        cout << "method is not supported, please choose from 1 or 2" << endl;
+    }
+
+    if (m_debug) cout << "------------------------------------------" << endl;
+
+    delete h1;
+    delete h2;
+
+    return h_correlation;
+}
+
+
+
+// Making 2D correction in pt, eta and gap
+TH2* CorrelationMaker::Make2DCorrUpc(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, float _add_low, float _add_high, int method) {
+
+    TH2* h1 = 0;
+    TH2* h2 = 0;
+    
+    int type = 1; // UPC events
+
+    string path_sig = m_anaConfig->getCorrHistPathSame();
+    string path_mix = m_anaConfig->getCorrHistPathMix();
+
+    if (m_debug) cout << "Merging the following slices" << endl;
+    int index_Nch_low = 0;
+    int index_Nch_high = 0;
+    for (int iNch=1; iNch<m_anaConfig->getInputMultiBinning()->GetXaxis()->GetNbins() + 1; iNch++){
+        if (m_anaConfig->getInputMultiBinning()->GetXaxis()->GetBinLowEdge(iNch) == _Nch_low)  index_Nch_low  = iNch - 1; 
+        if (m_anaConfig->getInputMultiBinning()->GetXaxis()->GetBinUpEdge(iNch)  == _Nch_high) index_Nch_high = iNch - 1; 
+    }
+
+
+    int index_pt_low = 0;
+    int index_pt_high = 0;
+    for (int ipt=1; ipt<m_anaConfig->getInputPtBinning()->GetXaxis()->GetNbins() + 1; ipt++){
+        if (m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) == _pt_low)  index_pt_low  = ipt - 1; 
+        if (m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  == _pt_high) index_pt_high = ipt - 1; 
+    }
+    if (m_debug) {
+        cout << "index_Nch_low = " << index_Nch_low << ",\tindex_Nch_high = " << index_Nch_high << endl;
+        cout << "index_pt_low  = " << index_pt_low << ", \tindex_pt_high  = " << index_pt_high << endl;
+    }
+
+    int index_add_low = 0;
+    int index_add_high = 0;
+    for (int iadd=1; iadd<m_anaConfig->getInputThirdBinning()->GetXaxis()->GetNbins() + 1; iadd++){
+        if (m_anaConfig->getInputThirdBinning()->GetXaxis()->GetBinLowEdge(iadd) == _add_low)  index_add_low  = iadd - 1;
+        if (m_anaConfig->getInputThirdBinning()->GetXaxis()->GetBinUpEdge(iadd)  == _add_high) index_add_high = iadd - 1;
+    }
+
+    m_anaConfig->inputFile()->cd();
+    TH2F* h2_nsig = (TH2F*)gDirectory->Get(m_anaConfig->getTrigYieldHistName().c_str());
+    if (!h2_nsig) cout << "Cannot retrieve yield hitogram for PTY calculation" << endl;
+
+    float nsig = 0;
+    for (int iNch=index_Nch_low; iNch<index_Nch_high+1; iNch++) {
+        for (int ipt=index_pt_low; ipt<index_pt_high+1; ipt++) {
+            for (int iadd=index_add_low; iadd<index_add_high+1; iadd++) {
+
+                // example names
+                //h_deta_dphi_same_Mq8_ptq7_Sq15_Pq1
+                //h2_deta_dphi_mixed_Mq8_ptq7_Sq15_tq0_Pq1
+                TH2D* htemp_1 = (TH2D*)gDirectory->Get(Form("%sMq%d_ptq%d_Sq%d_Pq%d", path_sig.c_str(), iNch, ipt, iadd, type));
+                TH2D* htemp_2 = (TH2D*)gDirectory->Get(Form("%sMq%d_ptq%d_Sq%d_tq0_Pq%d",path_mix.c_str(),iNch, ipt, iadd, type));
+
+                if (htemp_1->GetEntries() == 0) {
+	                delete htemp_1;
+	                delete htemp_2;
+                    continue;
+                }
+
+                htemp_2->Scale(htemp_1->Integral()/htemp_2->Integral());
+                nsig += h2_nsig->GetBinContent(ipt+1, iNch+1, iadd+1);
+
+                if (iNch==index_Nch_low && ipt==index_pt_low && iadd==index_add_low) {
+                    h1 = (TH2D*) htemp_1->Clone(Form("h1_Nch%d_%d_pt%d_pt%d", index_Nch_low, index_Nch_high, index_pt_low, index_pt_high));
+                    h2 = (TH2D*) htemp_2->Clone(Form("h2_Nch%d_%d_pt%d_pt%d", index_Nch_low, index_Nch_high, index_pt_low, index_pt_high));
+                } else {
+                    h1->Add(htemp_1);
+                    h2->Add(htemp_2);
+                }    
+
+                delete htemp_1;
+                delete htemp_2;
+                if (m_debug) {
+                    cout << "pt: " << h2_nsig->GetXaxis()->GetBinLowEdge(ipt+1) << " ~ " << h2_nsig->GetXaxis()->GetBinUpEdge(ipt+1) << endl;
+                    cout << "nch: " << h2_nsig->GetYaxis()->GetBinLowEdge(iNch+1) << " ~ " << h2_nsig->GetYaxis()->GetBinUpEdge(iNch+1) << endl;
+                    cout << "gap: " << h2_nsig->GetZaxis()->GetBinLowEdge(iadd+1) << " ~ " << h2_nsig->GetZaxis()->GetBinUpEdge(iadd+1) << endl;
+                    cout << "pt index = " << ipt << ", Nch index = " << iNch << ", gap index = " << iadd << endl;
+                    cout << "ntrig = " << h2_nsig->GetBinContent(ipt+1, iNch+1, iadd+1) << endl;
+                    cout << endl;
+                }    
+            } 
+
         }
     }
 
