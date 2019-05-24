@@ -891,10 +891,19 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     m_h_ridge = (TH1F*) m_hist_HM->Clone("h_ridge");
     m_h_ridge->Reset();
     for (int i=1; i<m_hist_HM->GetXaxis()->GetNbins()+1; i++){
-        float _residual = m_hist_HM->GetBinContent(i) - f_show_periph->Eval(m_hist_HM->GetBinCenter(i)) + result.Value(Npar - 1); // add back the pedestal
+        //float _residual = m_hist_HM->GetBinContent(i) - f_show_periph->Eval(m_hist_HM->GetBinCenter(i)) + result.Value(Npar - 1); // add back the pedestal
+
+        float _residual = m_hist_HM->GetBinContent(i) - (m_hist_LM->GetBinContent(i) * result.Value(Npar - 2)); // add back the pedestal
+
+        //cout << "YLM error = " << m_hist_LM->GetBinError(i)/m_hist_LM->GetBinContent(i) << endl;
+        //cout << "F error = " << result.ParError(Npar - 2) / result.Value(Npar - 2) << endl;
+
+        //float _lm_error = (m_hist_LM->GetBinContent(i) * result.Value(Npar - 2)) * sqrt( pow(m_hist_LM->GetBinError(i)/m_hist_LM->GetBinContent(i),2) + pow(result.ParError(Npar - 2) / result.Value(Npar - 2),2) );
+        float _lm_error = (m_hist_LM->GetBinContent(i) * result.Value(Npar - 2)) * sqrt( pow(m_hist_LM->GetBinError(i)/m_hist_LM->GetBinContent(i),2) + 0. );
+        float _residual_error = sqrt( pow(m_hist_HM->GetBinError(i),2) + pow(_lm_error, 2));
+
         _residual *= m_ridge_scaleFactor;
-        float _residual_error = _residual * ( m_hist_HM->GetBinError(i) / m_hist_HM->GetBinContent(i) ) * m_ridge_scaleFactor;
-        //float _residual_error = m_hist_HM->GetBinError(i)*m_ridge_scaleFactor;
+        _residual_error *= m_ridge_scaleFactor;
         m_h_ridge->SetBinContent(i,_residual);
         m_h_ridge->SetBinError  (i,_residual_error);
     }
