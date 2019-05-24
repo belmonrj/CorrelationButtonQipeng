@@ -72,6 +72,7 @@ class CorrelationMaker {
     float weight2016DzeroAna(int index_Nch);
     float weight295(int index_Nch);
     float weight435(int index_Nch);
+    float weight435AnaSel(int index_Nch);
 
     // main function for generating single 1D correlation histogram
     // method1 -- ATLAS mixed event normalization, projection first, then take ratio (default ATLAS method)
@@ -185,6 +186,19 @@ float CorrelationMaker::weight435(int index_Nch) {
 
 
 
+float CorrelationMaker::weight435AnaSel(int index_Nch) {
+    // luminosity for triggers used in run 313295 in p+Pb
+    // use 1./lumi for this analysis
+    float _lumi = 1.;
+    if (index_Nch<14) _lumi = 0.016328;
+    else if (index_Nch<20) _lumi = 0.002155;
+    else if (index_Nch<24) _lumi = 0.262875;
+    else _lumi = 0.262595;
+    return 1./_lumi;
+}
+
+
+
 // a little bit wired to have multiplicity cut as float instead of int
 // however, just keep it this way for now
 TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, float _Nch_high, int method) {
@@ -287,6 +301,8 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
                 _weight = weight295(iNch);
             } else if (getWeightIndex() == 4) {
                 _weight = weight435(iNch);
+            } else if (getWeightIndex() == 5) {
+                _weight = weight435AnaSel(iNch);
             }
             // to be extend to support other analysis
             htemp_1->Scale(_weight);
@@ -1470,6 +1486,8 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
                     _weight = weight295(iNch);
                 } else if (getWeightIndex() == 4) {
                     _weight = weight435(iNch);
+                } else if (getWeightIndex() == 5) {
+                    _weight = weight435AnaSel(iNch);
                 }
                 // to be extend to support other analysis
 
