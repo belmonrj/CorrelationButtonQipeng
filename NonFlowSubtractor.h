@@ -60,6 +60,12 @@ class NonFlowSubtractor {
 
     TH1F* getChi2Hist() {return h_chi2_c2;}
 
+    // interface for getting and setting template fit parameters
+    std::vector<float> getParVector() {return m_parVector;} 
+    void setParVector(std::vector<float> _vec) { m_parVector = _vec;} 
+
+    void setInteration(bool _flag) {m_doIteration = _flag;}
+
   private:
     // total number of parameters of ATLAS fit for LM events
     int m_nparLmAtlas; // should be m_nhar_LM + 1
@@ -68,6 +74,9 @@ class NonFlowSubtractor {
     // total number of parameters of ATLAS fit for HM events
     int m_nparHmAtlas; // should be m_nhar_LM + m_nhar_HM + 3
     std::vector<string> m_parName_HM;
+    std::vector<float> m_parVector;
+
+    bool m_doIteration;
 
     std::string _formula_LM;
     std::string _formula_LM_ZYAM;
@@ -278,6 +287,8 @@ NonFlowSubtractor :: NonFlowSubtractor() {
     m_h_pull = 0;
     m_h_ridge = 0;
 
+    m_doIteration = true;
+
     m_plotBulkRef = false;
     m_ridge_scaleFactor = 1;
 
@@ -291,6 +302,8 @@ NonFlowSubtractor :: NonFlowSubtractor() {
 
     _global_chi2 = 0;;
     _global_ndof = 0;;
+
+    m_parVector.clear();
 }
 
 

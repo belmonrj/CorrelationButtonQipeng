@@ -49,6 +49,14 @@ subResult NonFlowSubtractor :: templateHistFit(TH1* hist_LM, TH1* hist_HM) {
     parInitValues.at(Npar-2) = f_HM->GetParameter(getNHar());
     parInitValues.at(Npar-1) = f_HM->GetParameter(getNHar()+1);
 
+    // the user needs to make sure the parVector is updated by hand every time before running the fit
+    // overwrite the parInitValues list with external parameter input, usually from previous fit 
+    if (m_parVector.size() > 0 && m_doIteration) {
+        for (int i=0; i<Npar; i++) { 
+            parInitValues.at(i) = m_parVector.at(i);
+            //cout << "i = " << i << ", value = " << parInitValues.at(i) << endl;
+        }
+    }
 
     ROOT::Fit::DataOptions opt;
     ROOT::Fit::DataRange range;
@@ -111,6 +119,11 @@ subResult NonFlowSubtractor :: templateHistFit(TH1* hist_LM, TH1* hist_HM) {
         f_HM->SetParameter(ipar, result.Value(ipar));
         f_HM->SetParError (ipar, result.ParError(ipar));
     } 
+
+    m_parVector.clear();
+    for (int i=0; i<Npar; i++) { 
+        m_parVector.push_back(result.Value(i));
+    }
 
     if (m_debug) {
         cout << endl;
@@ -893,11 +906,9 @@ subResult NonFlowSubtractor :: templateFit(TH1* hist_LM, TH1* hist_HM) {
     for (int i=1; i<m_hist_HM->GetXaxis()->GetNbins()+1; i++){
         //float _residual = m_hist_HM->GetBinContent(i) - f_show_periph->Eval(m_hist_HM->GetBinCenter(i)) + result.Value(Npar - 1); // add back the pedestal
 
-        float _residual = m_hist_HM->GetBinContent(i) - (m_hist_LM->GetBinContent(i) * result.Value(Npar - 2)); // add back the pedestal
-
+        float _residual = m_hist_HM->GetBinContent(i) - (m_hist_LM->GetBinContent(i) * result.Value(Npar - 2));
         //cout << "YLM error = " << m_hist_LM->GetBinError(i)/m_hist_LM->GetBinContent(i) << endl;
         //cout << "F error = " << result.ParError(Npar - 2) / result.Value(Npar - 2) << endl;
-
         //float _lm_error = (m_hist_LM->GetBinContent(i) * result.Value(Npar - 2)) * sqrt( pow(m_hist_LM->GetBinError(i)/m_hist_LM->GetBinContent(i),2) + pow(result.ParError(Npar - 2) / result.Value(Npar - 2),2) );
         float _lm_error = (m_hist_LM->GetBinContent(i) * result.Value(Npar - 2)) * sqrt( pow(m_hist_LM->GetBinError(i)/m_hist_LM->GetBinContent(i),2) + 0. );
         float _residual_error = sqrt( pow(m_hist_HM->GetBinError(i),2) + pow(_lm_error, 2));
@@ -1257,10 +1268,11 @@ subResult NonFlowSubtractor :: referenceFit(TH1* hist_LM, TH1* hist_HM) {
     m_h_ridge = (TH1F*) m_hist_HM->Clone("h_ridge");
     m_h_ridge->Reset();
     for (int i=1; i<m_hist_HM->GetXaxis()->GetNbins()+1; i++){
-        float _residual = m_hist_HM->GetBinContent(i) - f_show_periph->Eval(m_hist_HM->GetBinCenter(i)) + result.Value(Npar - 1); // add back the pedestal
-        _residual *= m_ridge_scaleFactor;
-        float _residual_error = _residual * ( m_hist_HM->GetBinError(i) / m_hist_HM->GetBinContent(i) ) * m_ridge_scaleFactor;
-        //float _residual_error = m_hist_HM->GetBinError(i)*m_ridge_scaleFactor;
+        
+        float _residual = m_hist_HM->GetBinContent(i) - (m_hist_LM->GetBinContent(i) * result.Value(Npar - 2));
+        float _lm_error = (m_hist_LM->GetBinContent(i) * result.Value(Npar - 2)) * sqrt( pow(m_hist_LM->GetBinError(i)/m_hist_LM->GetBinContent(i),2) + 0. ); // ignore errors on the F parameter
+        float _residual_error = sqrt( pow(m_hist_HM->GetBinError(i),2) + pow(_lm_error, 2));
+
         m_h_ridge->SetBinContent(i,_residual);
         m_h_ridge->SetBinError  (i,_residual_error);
     }
@@ -2148,7 +2160,7 @@ bool NonFlowSubtractor :: plotAtlas3pHM (TCanvas* theCanvas) {
     h_pull->GetXaxis()->SetTickLength(0.10);
     h_pull->GetYaxis()->CenterTitle(kTRUE);
     h_pull->SetYTitle("Pull");
-    h_pull->Draw("EX0");
+    h_pull->Draw("AXIS");
     TGraph* line0 = new TGraph(2);
     line0->SetPoint(0,-5,0);
     line0->SetPoint(1,15,0);
@@ -2170,6 +2182,7 @@ bool NonFlowSubtractor :: plotAtlas3pHM (TCanvas* theCanvas) {
     line_m2->SetLineWidth(2);
     line_p2->Draw("SAME");
     line_m2->Draw("SAME");
+    h_pull->Draw("EX0SAME");
 
     plotText( 0.40, 0.82, 1, Form("Global: #it{#chi}^{2} / ndof = %.2f / %d", _global_chi2, _global_ndof), 0.10);
     plotText( 0.40, 0.15, 1, Form("Post-Fit Test: #it{#chi}^{2} / #it{N}_{point} = %.2f / %d", _chi2, h_pull->GetXaxis()->GetNbins()), 0.10);
@@ -2204,7 +2217,7 @@ bool NonFlowSubtractor :: plotAtlas3pHM (TCanvas* theCanvas) {
     m_h_ridge->GetXaxis()->SetTitleOffset(0.7);
     m_h_ridge->GetXaxis()->SetLabelSize(0.10);
     m_h_ridge->GetXaxis()->SetTickLength(0.08);
-    m_h_ridge->Draw("EX0SAME");
+    m_h_ridge->Draw("AXIS");
 
     f_show_ridge->SetLineStyle(1);
     f_show_ridge->SetLineWidth(2);
@@ -2219,6 +2232,7 @@ bool NonFlowSubtractor :: plotAtlas3pHM (TCanvas* theCanvas) {
         f_show_ridge3->SetLineStyle(3);
         f_show_ridge3->Draw("same");
     }
+    m_h_ridge->Draw("EX0SAME");
     plotMarkerLineText(0.60, 0.88, 1.0,1, 20, 1,1,"Data", 0.06, true);
     plotMarkerLineText(0.60, 0.78, 0, 2, 1, 2, 1,"#it{Y}^{ridge}", 0.06);
     plotMarkerLineText(              0.77,0.88, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge}",0.06);

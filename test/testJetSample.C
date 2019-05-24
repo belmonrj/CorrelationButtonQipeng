@@ -26,6 +26,7 @@ void testJetSample() {
     subResult theResult = subTool.templateHistFit(h_correlation_LM, h_correlation_LM_bulk, h_correlation_HM);
 
     subResult theResult2 = subTool2.templateHistFit(h_correlation_LM, h_correlation_HM);
+    theResult2 = subTool2.templateHistFit(h_correlation_LM, h_correlation_HM);
 
     //--------------------------------------------------
     // Access the fitted results and plots
