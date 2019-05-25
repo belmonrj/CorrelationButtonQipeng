@@ -4,7 +4,7 @@ void testSimple() {
     TFile* fin = new TFile(Form("./correlationHistTest.root"),"READ");
 
     TH1F* h_correlation_LM  = (TH1F*)fin->Get( Form("PTYRaw/dphi_Nch_ref") );
-    TH1F* h_correlation_HM  = (TH1F*)fin->Get( Form("PTYRaw/dphi_Nch5") );
+    TH1F* h_correlation_HM  = (TH1F*)fin->Get( Form("PTYRaw/dphi_Nch6") );
 
     // Correlation for the second lowest LM bin 
     // will be used for correction
@@ -14,14 +14,17 @@ void testSimple() {
     // change the fitter configure before call init() here
     //subTool.setAtlasFixedC3();
     //subTool.setAtlasFixedC4();
-    //subTool.setDebug(); // Qipeng suggests to not use debug
+    subTool.setDebug();
+    //subTool.setZYAM();
     subTool.init();
 
     //--------------------------------------------------
     // ATLAS template fit
     //--------------------------------------------------
-    //subResult theResult = subTool.templateFit(h_correlation_LM, h_correlation_HM, h_correlation_LM2); // this is for ATLAS improved method
+    //subResult theResult = subTool.templateFit(h_correlation_LM, h_correlation_HM, h_correlation_LM2);
     subResult theResult = subTool.templateFit(h_correlation_LM, h_correlation_HM);
+    //subResult theResult = subTool.referenceFit(h_correlation_LM, h_correlation_HM);
+    //subResult theResult = subTool.templateHistFit(h_correlation_LM, h_correlation_HM, h_correlation_LM2);
     //subResult theResult = subTool.templateHistFit(h_correlation_LM, h_correlation_HM);
 
     //--------------------------------------------------
@@ -35,17 +38,20 @@ void testSimple() {
     //hsym_HM->SetName("hs_HM");
     //subResult theResult = subTool.templateFit(hsym_LM, hsym_HM);
 
+    /*
+    */
     //--------------------------------------------------
     // Access the fitted results and plots
     //--------------------------------------------------
     cout << "v22 = " << theResult.getV22SubValue() << " +/- " << theResult.getV22SubError() << endl;
-    //cout << "Improved v22 = " << theResult.getV22SubImpValue() << " +/- " << theResult.getV22SubImpError() << endl; // 3 histos instead of 2, ATLAS improved method
+    cout << "Improved v22 = " << theResult.getV22SubImpValue() << " +/- " << theResult.getV22SubImpError() << endl;
 
-    TCanvas* c1 = new TCanvas("c1","scaling",50,50, 600,700);
     //TCanvas* c1 = new TCanvas("c1","scaling",50,50, 600,600);
-    //subTool.plotAtlasHistHM(c1);
-    subTool.plotAtlasSubHM(c1);
+    TCanvas* c1 = new TCanvas("c1","scaling",50,50, 600,800);
+    subTool.plotAtlas3pHM(c1);
+    //subTool.plotAtlasHistSubHM(c1);
     c1->cd();
+    c1->SaveAs("test.pdf");
     // add addtional lengends
     
     //TCanvas* c2 = new TCanvas("c2","scaling",50,50, 600,600);

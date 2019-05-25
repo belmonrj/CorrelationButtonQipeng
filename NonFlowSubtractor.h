@@ -60,6 +60,12 @@ class NonFlowSubtractor {
 
     TH1F* getChi2Hist() {return h_chi2_c2;}
 
+    // interface for getting and setting template fit parameters
+    std::vector<float> getParVector() {return m_parVector;} 
+    void setParVector(std::vector<float> _vec) { m_parVector = _vec;} 
+
+    void setInteration(bool _flag) {m_doIteration = _flag;}
+
   private:
     // total number of parameters of ATLAS fit for LM events
     int m_nparLmAtlas; // should be m_nhar_LM + 1
@@ -68,6 +74,9 @@ class NonFlowSubtractor {
     // total number of parameters of ATLAS fit for HM events
     int m_nparHmAtlas; // should be m_nhar_LM + m_nhar_HM + 3
     std::vector<string> m_parName_HM;
+    std::vector<float> m_parVector;
+
+    bool m_doIteration;
 
     std::string _formula_LM;
     std::string _formula_LM_ZYAM;
@@ -75,6 +84,8 @@ class NonFlowSubtractor {
     double m_dphiRangeLow;
     double m_dphiRangeHigh;
 
+    float _global_chi2;
+    int   _global_ndof;
 
   public:
     NonFlowSubtractor();
@@ -153,10 +164,10 @@ class NonFlowSubtractor {
     subResult fourierFitLM (TH1* hist, bool _zyam = false);
 
 
-    TH1F* getPesudoHist_HM () {return m_hist_pesudo_HM;}
-    TH1F* getPesudoHist_LM () {return m_hist_pesudo_LM;}
-    void setPesudoVaryScale (float _scale) { m_pesudoVaryScale = _scale;}
-    float getPesudoVaryScale () {return m_pesudoVaryScale;}
+    TH1F* getPseudoHist_HM () {return m_hist_pseudo_HM;}
+    TH1F* getPseudoHist_LM () {return m_hist_pseudo_LM;}
+    void  setPseudoVaryScale (float _scale) { m_pseudoVaryScale = _scale;}
+    float getPseudoVaryScale () {return m_pseudoVaryScale;}
 
 
     // Additional interface to configure the ATLAS Template fitting
@@ -173,6 +184,7 @@ class NonFlowSubtractor {
     // plot utilities for default ATLAS template fitting (no improved correction applied yet)
     // major plotting style with HM template fit and ridge fit
     bool plotAtlasSubHM(TCanvas* theCanvas); // big figure
+    bool plotAtlas3pHM(TCanvas* theCanvas); // big figure
     bool plotAtlasHistSubHM(TCanvas* theCanvas); // big figure
 
     bool plotAtlasHM(TPad* thePad); // small figure
@@ -226,9 +238,9 @@ class NonFlowSubtractor {
     int m_fitPrintLevel;
 
     // members for toy fit model check
-    TH1F* m_hist_pesudo_HM;
-    TH1F* m_hist_pesudo_LM;
-    float m_pesudoVaryScale;
+    TH1F* m_hist_pseudo_HM;
+    TH1F* m_hist_pseudo_LM;
+    float m_pseudoVaryScale;
 
     float m_ridge_scaleFactor;
 
@@ -275,16 +287,23 @@ NonFlowSubtractor :: NonFlowSubtractor() {
     m_h_pull = 0;
     m_h_ridge = 0;
 
+    m_doIteration = true;
+
     m_plotBulkRef = false;
     m_ridge_scaleFactor = 1;
 
-    m_pesudoVaryScale = 0.0;
+    m_pseudoVaryScale = 0.0;
 
     m_dphiRangeLow = -0.5*TMath::Pi();
     m_dphiRangeHigh = 1.5*TMath::Pi();
 
     m_applyZYAM = false;
     m_fitPrintLevel = 0;
+
+    _global_chi2 = 0;;
+    _global_ndof = 0;;
+
+    m_parVector.clear();
 }
 
 
