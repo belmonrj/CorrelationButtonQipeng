@@ -34,7 +34,8 @@ void newplot_pAu_pp()
 void arguments(int indexA, int indexB, int indexC, const char* name)
 {
 
-  ifstream fin("new_data_pp.txt");
+  //ifstream fin("new_data_pp.txt");
+  ifstream fin("new_data_pp_improved.txt");
 
   bool verbose = false;
 
