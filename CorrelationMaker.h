@@ -230,8 +230,8 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
     int index_Nch_low = 0;
     int index_Nch_high = 0;
     for (int iNch=1; iNch<m_anaConfig->getInputMultiBinning()->GetXaxis()->GetNbins() + 1; iNch++){
-        if (m_anaConfig->getInputMultiBinning()->GetXaxis()->GetBinLowEdge(iNch) == _Nch_low)  index_Nch_low  = iNch - 1; 
-        if (m_anaConfig->getInputMultiBinning()->GetXaxis()->GetBinUpEdge(iNch)  == _Nch_high) index_Nch_high = iNch - 1; 
+        if (fabs(m_anaConfig->getInputMultiBinning()->GetXaxis()->GetBinLowEdge(iNch) - _Nch_low)  < 0.001)  index_Nch_low  = iNch - 1; 
+        if (fabs(m_anaConfig->getInputMultiBinning()->GetXaxis()->GetBinUpEdge(iNch)  - _Nch_high)  < 0.001) index_Nch_high = iNch - 1; 
     }
     if (m_debug) cout << "index_Nch_low = " << index_Nch_low << ",\tindex_Nch_high = " << index_Nch_high << endl;
 
@@ -239,12 +239,13 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
     int index_pt_low = 0;
     int index_pt_high = 0;
     for (int ipt=1; ipt<m_anaConfig->getInputPtBinning()->GetXaxis()->GetNbins() + 1; ipt++){
-        if (m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) == _pt_low)  index_pt_low  = ipt - 1; 
-        if (m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  == _pt_high) index_pt_high = ipt - 1; 
+        if ( fabs(m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinLowEdge(ipt) - _pt_low)  < 0.001) index_pt_low  = ipt - 1; 
+        if ( fabs(m_anaConfig->getInputPtBinning()->GetXaxis()->GetBinUpEdge(ipt)  - _pt_high) < 0.001) index_pt_high = ipt - 1; 
     }
 
     for (int iNch=index_Nch_low; iNch<index_Nch_high+1; iNch++) {
         for (int ipt=index_pt_low; ipt<index_pt_high+1; ipt++) {
+
 
 	        TH2* htemp_1 = (TH2*)gDirectory->Get(Form("%sNch%d_pt%d",path_sig.c_str(),iNch,ipt));
 	        TH2* htemp_2 = (TH2*)gDirectory->Get(Form("%sNch%d_pt%d",path_mix.c_str(),iNch,ipt));
@@ -269,6 +270,7 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
                     float _Neff_pair_same  = htemp_1->GetEffectiveEntries()/_nEvt;
                     float _Ncorr_pair_same = _Neff_pair_same - 0.5*_Neff_trig*(_Neff_trig-1);
                     float _errorScale_same = sqrt(_Neff_pair_same/_Ncorr_pair_same);
+
                     if (m_debug) {
                         cout << "Running the error correction: " << endl; 
                         cout << "-----------------------------------------" << endl; 
@@ -279,14 +281,21 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
                     } 
                     // mixed event error corrections
                     // not sure how useful they are
-                    float _Neff_pair_mix  = htemp_1->GetEffectiveEntries()/_nEvt;
-                    float _Ncorr_pair_mix = _Neff_pair_mix - 0.5*m_mixDepth*_Neff_trig*(_Neff_trig-1);
-                    float _errorScale_mix = sqrt(_Neff_pair_mix/_Ncorr_pair_mix);
+                    float _errorScale_mix;
+                    if (htemp_2) {
+                        float _Neff_pair_mix  = htemp_1->GetEffectiveEntries()/_nEvt;
+                        float _Ncorr_pair_mix = _Neff_pair_mix - 0.5*m_mixDepth*_Neff_trig*(_Neff_trig-1);
+                        _errorScale_mix = sqrt(_Neff_pair_mix/_Ncorr_pair_mix);
+                    }
+
+                    // hard-coded scaling
+                    //_errorScale_same = sqrt(2);
+                    //_errorScale_mix  = sqrt(2);
 
                     for (int xbin=1; xbin<htemp_1->GetNbinsX()+1; xbin++) {
                         for (int ybin=1; ybin<htemp_1->GetNbinsY()+1; ybin++) {
                             htemp_1->SetBinError(xbin, ybin, htemp_1->GetBinError(xbin,ybin)*_errorScale_same);
-                            htemp_2->SetBinError(xbin, ybin, htemp_2->GetBinError(xbin,ybin)*_errorScale_mix );
+                            if (htemp_2) htemp_2->SetBinError(xbin, ybin, htemp_2->GetBinError(xbin,ybin)*_errorScale_mix );
                         }
                     }
                 }
@@ -306,7 +315,7 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
             }
             // to be extend to support other analysis
             htemp_1->Scale(_weight);
-            htemp_2->Scale(_weight);
+            if (htemp_2) htemp_2->Scale(_weight);
             nsig += h2_nsig->GetBinContent(ipt+1, iNch+1) * _weight;
             nsigMix += h2_nsigMix->GetBinContent(ipt+1, iNch+1) * _weight;
 
@@ -315,10 +324,10 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
 
 	        if (iNch==index_Nch_low && ipt==index_pt_low) {
 	            h1 = (TH2*) htemp_1->Clone(Form("h1_Nch%d_%d", index_Nch_low, index_Nch_high));
-	            h2 = (TH2*) htemp_2->Clone(Form("h2_Nch%d_%d", index_Nch_low, index_Nch_high));
+	            if (htemp_2) h2 = (TH2*) htemp_2->Clone(Form("h2_Nch%d_%d", index_Nch_low, index_Nch_high));
 	        } else {
                 h1->Add(htemp_1);
-                h2->Add(htemp_2);
+                if (htemp_2) h2->Add(htemp_2);
 	        }
 	        delete htemp_1;
 	        delete htemp_2;
@@ -444,7 +453,7 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
     if (m_h1_sig) {
         m_h1_sig->Rebin(m_rebin);
         m_h1_sig->Scale(1./m_rebin);
-        m_h1_sig->Scale(1./m_h1_mix->Integral());
+        if (m_h1_mix) m_h1_sig->Scale(1./m_h1_mix->Integral());
         m_h1_sig->SetName(Form("h_sig_dphi_gap%.1fto%.1f_Nch%.0fto%.0f_pt%.0fto%.0f",m_anaConfig->getEtaRangeLow(), m_anaConfig->getEtaRangeHigh(), _Nch_low,_Nch_high,_pt_low,_pt_high));
     }
     

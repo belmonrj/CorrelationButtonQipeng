@@ -209,12 +209,14 @@ void FlowAnaConfig::checkBinningConsistency() const {
             for (int obin = 0; obin < m_output_ptBinning->GetXaxis()->GetNbins() + 1; obin++) {
                 bool _hasInconsistency = true;
                 for (int ibin = 0; ibin < m_input_ptBinning->GetXaxis()->GetNbins() + 1; ibin++) {
-                    if (_ptOutput_range[obin] == _ptInput_range[ibin]) {
+                    if ( fabs(_ptOutput_range[obin] - _ptInput_range[ibin]) < 0.01) {
                         _hasInconsistency = false;
                         break;
                     }
                 }
-                if (_hasInconsistency) cout << "Find inconsistency between input and output pt binning" << endl;
+                if (_hasInconsistency) {
+                    cout << "Find inconsistency between input and output pt binning" << endl;
+                }
             }
         } 
     }
