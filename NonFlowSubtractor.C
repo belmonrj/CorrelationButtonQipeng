@@ -151,6 +151,7 @@ subResult NonFlowSubtractor :: templateHistFit(TH1* hist_LM, TH1* hist_HM) {
                                                   + pow(_error_F_temp/_value_F_temp,2));
 
     theResult.setNHar(getNHar());
+    cout << result.Ndf() << endl;
     theResult.setChi2(result.Chi2() / result.Ndf());
     theResult.setPedstalValue (_value_G_HM);
     theResult.setPedstalError (_error_G_HM);
@@ -2429,7 +2430,7 @@ bool NonFlowSubtractor :: plotAtlasLM (TCanvas* theCanvas) {
         ref_pull->SetBinError(i,m_hist_LM->GetBinError(i)/m_hist_LM->GetBinError(i));
         _chi2 += pow(_residual/m_hist_LM->GetBinError(i),2);
     }
-    _chi2 /= ref_pull->GetXaxis()->GetNbins()-4;
+    //_chi2 /= ref_pull->GetXaxis()->GetNbins()-4;
 
     pad2->cd();
     ref_pull->SetMaximum(4.9);
@@ -2468,6 +2469,6 @@ bool NonFlowSubtractor :: plotAtlasLM (TCanvas* theCanvas) {
     line_m2->SetLineWidth(2);
     line_m2->Draw("SAME");
 
-    plotText( 0.65, 0.44, 1, Form("#it{#chi}^{2}/ndof = %.2f",_chi2), 0.12);
+    plotText( 0.40, 0.42, 1, Form("Post-Fit Test: #it{#chi}^{2} / #it{N}_{point} = %.2f / %d", _chi2, ref_pull->GetXaxis()->GetNbins()), 0.12);
     return true;
 }
