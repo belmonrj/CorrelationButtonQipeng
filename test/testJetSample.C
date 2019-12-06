@@ -27,6 +27,7 @@ void testJetSample() {
 
     subResult theResult2 = subTool2.templateHistFit(h_correlation_LM, h_correlation_HM);
     theResult2 = subTool2.templateHistFit(h_correlation_LM, h_correlation_HM);
+    cout << theResult2.getChi2() << endl;
 
     //--------------------------------------------------
     // Access the fitted results and plots

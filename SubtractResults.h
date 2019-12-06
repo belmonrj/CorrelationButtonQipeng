@@ -41,6 +41,14 @@ class subResult {
     float getV22SubImpValue() { if (m_coeff_subImp_value.size() > 1) return m_coeff_subImp_value[1]; else return 0.;}
     float getV22SubImpError() { if (m_coeff_subImp_error.size() > 1) return m_coeff_subImp_error[1]; else return 0.;}
 
+    float getV33RawValue() { if (m_coeff_raw_value.size() > 2) return m_coeff_raw_value[2]; else return 0.;}
+    float getV33RawError() { if (m_coeff_raw_error.size() > 2) return m_coeff_raw_error[2]; else return 0.;}
+    float getV33SubValue() { if (m_coeff_sub_value.size() > 2) return m_coeff_sub_value[2]; else return 0.;}
+    float getV33SubError() { if (m_coeff_sub_error.size() > 2) return m_coeff_sub_error[2]; else return 0.;}
+
+    float getV33SubImpValue() { if (m_coeff_subImp_value.size() > 2) return m_coeff_subImp_value[2]; else return 0.;}
+    float getV33SubImpError() { if (m_coeff_subImp_error.size() > 2) return m_coeff_subImp_error[2]; else return 0.;}
+
     float getChi2() {return m_fitChi2;}
     void  setChi2(float _chi2) {m_fitChi2 = _chi2;}
 

@@ -2016,7 +2016,7 @@ bool NonFlowSubtractor :: plotAtlasSubHM (TCanvas* theCanvas) {
     }
     _chi2 /= h_pull->GetXaxis()->GetNbins()/2. - (getNHar() + 1);
     m_h_pull = (TH1F*) h_pull->Clone("m_h_Pull");
-    plotText( 0.65, 0.22, 1, Form("#it{#chi}^{2}/ndof = %.2f",_chi2), 0.05);
+    //plotText( 0.65, 0.22, 1, Form("#it{#chi}^{2}/ndof = %.2f",_chi2), 0.05);
 
     pad2->cd();
     int MaxBin_sub = m_h_ridge->GetMaximumBin();
@@ -2293,11 +2293,11 @@ bool NonFlowSubtractor :: plotAtlasHM (TCanvas* theCanvas) {
     f_show_periph->SetLineStyle(2);
     f_show_periph->Draw("same");
 
-    plotMarkerLineText(0.55, 0.85, 1.2,1, 20, 1,1,"HM Data", 0.05, true);
-    plotMarkerLineText(0.55, 0.78, 0, 2, 1, 2, 1,"Fit", 0.05);
-    plotMarkerLineText(0.55, 0.71, 0, kSpring+4, 0, kSpring+4, 2,"#it{G} + #it{F}#it{Y}^{LM}", 0.05);
-    plotMarkerLineText(              0.74,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}(0)",0.05);
-    if (!m_fixC3) plotMarkerLineText(0.74,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge} + #it{F}#it{Y}^{LM}(0)", 0.05);
+    plotMarkerLineText(0.55, 0.85, 1.2,1, 20, 1,1,"HM Data", 0.045, true);
+    plotMarkerLineText(0.55, 0.78, 0, 2, 1, 2, 1,"Fit", 0.045);
+    plotMarkerLineText(0.55, 0.71, 0, kSpring+4, 0, kSpring+4, 2,"#it{G} + #it{F}#it{Y}^{LM}", 0.045);
+    plotMarkerLineText(              0.73,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}(0)",0.045);
+    if (!m_fixC3) plotMarkerLineText(0.73,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge} + #it{F}#it{Y}^{LM}(0)", 0.045);
 
     float _chi2 = 0;
     for (int i=1; i<h_pull->GetXaxis()->GetNbins()+1; i++){
@@ -2307,12 +2307,12 @@ bool NonFlowSubtractor :: plotAtlasHM (TCanvas* theCanvas) {
         h_pull->SetBinError(i,m_hist_HM->GetBinError(i)/m_hist_HM->GetBinError(i));
         _chi2 += pow(_residual/m_hist_HM->GetBinError(i),2);
     }
-    _chi2 /= h_pull->GetXaxis()->GetNbins()- (getNHar() + 1);
+    //_chi2 /= h_pull->GetXaxis()->GetNbins()- (getNHar() + 1);
     m_h_pull = (TH1F*) h_pull->Clone("m_h_Pull");
 
     pad2->cd();
-    h_pull->SetMaximum(4.9);
-    h_pull->SetMinimum(-4.9);
+    h_pull->SetMaximum(5.9);
+    h_pull->SetMinimum(-5.9);
     //h_pull->SetMaximum(20.9);
     //h_pull->SetMinimum(-20.9);
     h_pull->GetYaxis()->SetNdivisions(406,kTRUE);
@@ -2349,11 +2349,123 @@ bool NonFlowSubtractor :: plotAtlasHM (TCanvas* theCanvas) {
     line_p2->Draw("SAME");
     line_m2->Draw("SAME");
 
-    plotText( 0.65, 0.44, 1, Form("#it{#chi}^{2}/ndof = %.2f",_chi2), 0.12);
+    plotText( 0.40, 0.86, 1, Form("Global: #it{#chi}^{2} / ndof = %.2f / %d", _global_chi2, _global_ndof), 0.10);
+    plotText( 0.40, 0.42, 1, Form("Post-Fit Test: #it{#chi}^{2} / #it{N}_{point} = %.2f / %d", _chi2, h_pull->GetXaxis()->GetNbins()), 0.10);
 
     pad1->cd();
     return true;
 }
+
+bool NonFlowSubtractor :: plotAtlasHMSimple (TCanvas* theCanvas) {
+    if (!theCanvas) return false;
+    TH1F* h_pull = (TH1F*) m_hist_HM->Clone("h_Pull");
+
+    theCanvas->cd();
+
+    TPad *pad1 = new TPad("pad1","top pad",0,0.3,1,1);
+    pad1->SetTopMargin(0.07);
+    pad1->SetBottomMargin(0.);
+    theCanvas->cd();
+    pad1->Draw();
+    TPad *pad2 = new TPad("pad2","bottom pad",0,0,1,0.3);
+    pad2->SetTopMargin(0);
+    pad2->SetBottomMargin(0.3);
+    theCanvas->cd();
+    pad2->Draw();
+
+    pad1->cd();
+    int MaxBin = m_hist_HM->GetMaximumBin();
+    int MinBin = m_hist_HM->GetMinimumBin();
+    float distance = m_hist_HM->GetBinContent(MaxBin) - m_hist_HM->GetBinContent(MinBin);
+    distance /= 2.0;
+    double Max = m_hist_HM->GetBinContent(MaxBin) + distance*1.5;
+    double Min = m_hist_HM->GetBinContent(MinBin) - distance/2.;
+    //double Min = m_hist_HM->GetBinContent(MinBin) - distance;
+    m_hist_HM->SetYTitle("#it{Y}(#Delta#it{#phi})");
+    m_hist_HM->GetYaxis()->SetRangeUser(Min, Max);
+    m_hist_HM->GetListOfFunctions()->Add(f_HM);
+    m_hist_HM->GetYaxis()->SetNdivisions(508,kTRUE);
+    m_hist_HM->GetXaxis()->SetNdivisions(509,kTRUE);
+    m_hist_HM->GetYaxis()->SetLabelSize(0.06);
+    m_hist_HM->GetYaxis()->SetTitleSize(0.06);
+    m_hist_HM->GetYaxis()->SetTitleOffset(1.00);
+    m_hist_HM->GetXaxis()->SetTickLength(0.067);
+    m_hist_HM->Draw("EX0SAME");
+    //f_show_flow2->SetLineColor(kBlue);
+    //f_show_flow2->SetLineStyle(2);
+    //f_show_flow2->Draw("same");
+    //if (!m_fixC3) {
+    //    f_show_flow3->SetLineColor(kOrange+1);
+    //    f_show_flow3->SetLineStyle(3);
+    //    f_show_flow3->Draw("same");
+    //}
+    //f_show_periph->SetLineColor(kSpring+4);
+    //f_show_periph->SetLineStyle(2);
+    //f_show_periph->Draw("same");
+
+    plotMarkerLineText(0.55, 0.85, 1.2,1, 20, 1,1,"HM Data", 0.045, true);
+    plotMarkerLineText(0.55, 0.78, 0, 2, 1, 2, 1,"Fit", 0.045);
+    //plotMarkerLineText(0.55, 0.71, 0, kSpring+4, 0, kSpring+4, 2,"#it{G} + #it{F}#it{Y}^{LM}", 0.045);
+    //plotMarkerLineText(              0.73,0.85, 0, 4, 0, 4, 2,"#it{Y}_{2}^{ridge} + #it{F}#it{Y}^{LM}(0)",0.045);
+    //if (!m_fixC3) plotMarkerLineText(0.73,0.78, 0, kOrange+1, 0, kOrange+1, 3,"#it{Y}_{3}^{ridge} + #it{F}#it{Y}^{LM}(0)", 0.045);
+
+    float _chi2 = 0;
+    for (int i=1; i<h_pull->GetXaxis()->GetNbins()+1; i++){
+        float _residual = m_hist_HM->GetBinContent(i) - f_HM->Eval(m_hist_HM->GetBinCenter(i));
+        float _pull = _residual / m_hist_HM->GetBinError(i);
+        h_pull->SetBinContent(i,_pull);
+        h_pull->SetBinError(i,m_hist_HM->GetBinError(i)/m_hist_HM->GetBinError(i));
+        _chi2 += pow(_residual/m_hist_HM->GetBinError(i),2);
+    }
+    //_chi2 /= h_pull->GetXaxis()->GetNbins()- (getNHar() + 1);
+    m_h_pull = (TH1F*) h_pull->Clone("m_h_Pull");
+
+    pad2->cd();
+    h_pull->SetMaximum(5.9);
+    h_pull->SetMinimum(-5.9);
+    //h_pull->SetMaximum(20.9);
+    //h_pull->SetMinimum(-20.9);
+    h_pull->GetYaxis()->SetNdivisions(406,kTRUE);
+    h_pull->GetYaxis()->SetLabelSize(0.14);
+    h_pull->GetYaxis()->SetTitleSize(0.14);
+    h_pull->GetYaxis()->SetTitleOffset(0.40);
+    h_pull->GetYaxis()->CenterTitle(kTRUE);
+    h_pull->GetXaxis()->SetTitleSize(0.13);
+    h_pull->GetXaxis()->SetTitleOffset(1.0);
+    h_pull->GetXaxis()->SetLabelSize(0.13);
+    h_pull->GetXaxis()->SetTickLength(0.10);
+    h_pull->SetXTitle("#Delta#it{#phi}");
+    h_pull->SetYTitle("Pull");
+    h_pull->Draw("EX0");
+    TGraph* line0 = new TGraph(2);
+    line0->SetPoint(0,-5,0);
+    line0->SetPoint(1,15,0);
+    line0->SetLineStyle(1);
+    line0->SetLineColor(2);
+    line0->SetLineWidth(2);
+    line0->Draw("SAME");
+    TGraph* line_p2 = new TGraph(2);
+    line_p2->SetPoint(0,-5, 2);
+    line_p2->SetPoint(1,15,2);
+    line_p2->SetLineStyle(2);
+    line_p2->SetLineColor(2);
+    line_p2->SetLineWidth(2);
+    TGraph* line_m2 = new TGraph(2);
+    line_m2->SetPoint(0,-5, -2);
+    line_m2->SetPoint(1,15,-2);
+    line_m2->SetLineStyle(2);
+    line_m2->SetLineColor(2);
+    line_m2->SetLineWidth(2);
+    line_p2->Draw("SAME");
+    line_m2->Draw("SAME");
+
+    //plotText( 0.40, 0.86, 1, Form("Global: #it{#chi}^{2} / ndof = %.2f / %d", _global_chi2, _global_ndof), 0.10);
+    //plotText( 0.40, 0.42, 1, Form("Post-Fit Test: #it{#chi}^{2} / #it{N}_{point} = %.2f / %d", _chi2, h_pull->GetXaxis()->GetNbins()), 0.10);
+
+    pad1->cd();
+    return true;
+}
+
 
 
 
@@ -2419,8 +2531,8 @@ bool NonFlowSubtractor :: plotAtlasLM (TCanvas* theCanvas) {
     f_LM->Draw("SAME");
     //cout << f_LM->Eval(0) << endl;
     //cout << endl;
-    plotMarkerLineText(0.25,0.42, 1.2,1, 24, 1,1,"LM Data", 0.05, true);
-    plotMarkerLineText(0.25,0.36, 0, 2, 1, kSpring-6, 3,"LM Fourier Fit", 0.05);
+    plotMarkerLineText(0.25,0.42, 1.2,1, 24, 1,1,"LM Data", 0.045, true);
+    plotMarkerLineText(0.25,0.36, 0, 2, 1, kSpring-6, 3,"LM Fourier Fit", 0.045);
 
     float _chi2 = 0;
     for (int i=1; i<ref_pull->GetXaxis()->GetNbins()+1; i++){
@@ -2433,8 +2545,8 @@ bool NonFlowSubtractor :: plotAtlasLM (TCanvas* theCanvas) {
     //_chi2 /= ref_pull->GetXaxis()->GetNbins()-4;
 
     pad2->cd();
-    ref_pull->SetMaximum(4.9);
-    ref_pull->SetMinimum(-4.9);
+    ref_pull->SetMaximum(5.9);
+    ref_pull->SetMinimum(-5.9);
     ref_pull->GetYaxis()->SetNdivisions(406,kTRUE);
     ref_pull->GetYaxis()->SetLabelSize(0.14);
     ref_pull->GetYaxis()->SetTitleSize(0.14);
@@ -2469,6 +2581,6 @@ bool NonFlowSubtractor :: plotAtlasLM (TCanvas* theCanvas) {
     line_m2->SetLineWidth(2);
     line_m2->Draw("SAME");
 
-    plotText( 0.40, 0.42, 1, Form("Post-Fit Test: #it{#chi}^{2} / #it{N}_{point} = %.2f / %d", _chi2, ref_pull->GetXaxis()->GetNbins()), 0.12);
+    plotText( 0.40, 0.42, 1, Form("Post-Fit Test: #it{#chi}^{2} / #it{N}_{point} = %.2f / %d", _chi2, ref_pull->GetXaxis()->GetNbins()), 0.10);
     return true;
 }

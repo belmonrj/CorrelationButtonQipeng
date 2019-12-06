@@ -192,6 +192,7 @@ class NonFlowSubtractor {
     bool plotAtlasLM(TPad* thePad); // small figure
     bool plotAtlasHM(TCanvas* theCanvas); // big figure
     bool plotAtlasLM(TCanvas* theCanvas); // big figure
+    bool plotAtlasHMSimple(TCanvas* theCanvas); // big figure
 
     bool plotAtlasHistHM(TCanvas* theCanvas); // small figure
     TH1F* getPullHist() {return m_h_pull;} // get pull for Brain's check
