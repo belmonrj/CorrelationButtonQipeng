@@ -1,0 +1,6 @@
+0.35 0 -nan 4.248e+92 0 0 -nan nan -nan -nan -nan
+0.7 0 -nan 0 -nan 0 -nan nan -nan -nan -nan
+1.2 0 -nan 0 -nan 0 -nan nan -nan -nan -nan
+1.7 0 -nan 0 -nan 0 -nan nan -nan -nan -nan
+2.35 0 -nan 0 -nan 0 -nan nan -nan -nan -nan
+3.5 0 -nan 0 -nan 0 -nan nan -nan -nan -nan
