@@ -34,7 +34,7 @@ void newplot_v33_dAu()
 void arguments(int indexA, int indexB, int indexC, const char* name)
 {
 
-  ifstream fin("new_data_dAu.txt");
+  ifstream fin("data_v33_dAu.txt");
 
   bool verbose = false;
 
