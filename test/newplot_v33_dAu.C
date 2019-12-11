@@ -90,7 +90,7 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
   double a,b,c,ea,eb,ec,c3,ec3;
   // ---
   char foutname[50];
-  sprintf(foutname,"data_v3_dAu_%s.txt",name);
+  sprintf(foutname,"DataTextFiles/data_v3_dAu_%s.txt",name);
   cout << "foutname is " << foutname << endl;
   ofstream fout(foutname);
   // sprintf(foutname,"data_%s.root",name);
