@@ -293,6 +293,33 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
   tgae_ppg191->SetLineColor(kRed);
   tgae_ppg191->SetFillColorAlpha(kRed,0.35);
 
+  // --- PPG216 data table
+  double p216_x[10];
+  double p216_y[10];
+  double p216_ey[10];
+  double p216_esyl[10];
+  double p216_esyh[10];
+  // pT                  v3                     v3StatErr               v3PosSystErr                 v3NegSysErr
+  p216_x[0] = 0.5;    p216_y[0] = 0.0019;    p216_ey[0] = 0.0011;    p216_esyh[0] = 0.0009;       p216_esyl[0] = 0.0008;
+  p216_x[1] = 0.7;    p216_y[1] = 0.0055;    p216_ey[1] = 0.0014;    p216_esyh[1] = 0.0025;       p216_esyl[1] = 0.0023;
+  p216_x[2] = 0.9;    p216_y[2] = 0.0073;    p216_ey[2] = 0.0018;    p216_esyh[2] = 0.0034;       p216_esyl[2] = 0.0031;
+  p216_x[3] = 1.1;    p216_y[3] = 0.0095;    p216_ey[3] = 0.0023;    p216_esyh[3] = 0.0045;       p216_esyl[3] = 0.0040;
+  p216_x[4] = 1.3;    p216_y[4] = 0.0138;    p216_ey[4] = 0.0029;    p216_esyh[4] = 0.0066;       p216_esyl[4] = 0.0059;
+  p216_x[5] = 1.5;    p216_y[5] = 0.0168;    p216_ey[5] = 0.0037;    p216_esyh[5] = 0.0080;       p216_esyl[5] = 0.0072;
+  p216_x[6] = 1.7;    p216_y[6] = 0.0141;    p216_ey[6] = 0.0046;    p216_esyh[6] = 0.0068;       p216_esyl[6] = 0.0060;
+  p216_x[7] = 1.9;    p216_y[7] = 0.0153;    p216_ey[7] = 0.0058;    p216_esyh[7] = 0.0074;       p216_esyl[7] = 0.0065;
+  p216_x[8] = 2.25;   p216_y[8] = 0.0191;    p216_ey[8] = 0.0053;    p216_esyh[8] = 0.0094;       p216_esyl[8] = 0.0081;
+  p216_x[9] = 2.75;   p216_y[9] = 0.0174;    p216_ey[9] = 0.0088;    p216_esyh[9] = 0.0088;       p216_esyl[9] = 0.0074;
+  TGraphAsymmErrors* tgae_p216_sys = new TGraphAsymmErrors(10,p216_x,p216_y,0,0,p216_esyl,p216_esyh);
+  tgae_p216_sys->SetLineWidth(20);
+  tgae_p216_sys->SetLineColor(kGray);
+  tgae_p216_sys->SetLineStyle(1);
+  tgae_p216_sys->SetFillColorAlpha(kBlack,0.35);
+  //tgae_p216_sys->Draw("pz");
+  TGraphErrors* tge_p216_stat = new TGraphErrors(10,p216_x,p216_y,0,p216_ey);
+  tge_p216_stat->SetMarkerColor(kBlack);
+  tge_p216_stat->SetMarkerStyle(kFullCircle);
+  //tge_p216_stat->Draw("p");
 
   TGraph* tg_sy_CNT_BBCS_FVTS_raw = new TGraph(nptbins,ptvalues,seyoungdata_CNT_BBCS_FVTS_raw);
   tg_sy_CNT_BBCS_FVTS_raw->SetLineColor(kBlue);
@@ -305,24 +332,26 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
   double xmin = 0.0;
   double xmax = 4.0;
   double ymin = -0.05;
-  double ymax = 0.35;
+  double ymax = 0.1;
   //arguments(index_CNT_BBCS,index_CNT_FVTS,index_FVTS_BBCS,"CNT_BBCS_FVTS");
   bool is_CNT_BBCS_FVTS = ( indexA == index_CNT_BBCS && indexB == index_CNT_FVTS && indexC == index_FVTS_BBCS );
   bool is_CNT_FVTN_FVTS = ( indexA == index_CNT_FVTN && indexB == index_CNT_FVTS && indexC == index_FVTN_FVTS );
-  if ( is_CNT_BBCS_FVTS ) ymin = -0.02;
-  if ( is_CNT_BBCS_FVTS ) ymax = 0.2;
+  if ( is_CNT_BBCS_FVTS ) ymin = -0.01;
+  if ( is_CNT_BBCS_FVTS ) ymax = 0.05;
   TH2D* hdummy = new TH2D("hdummy","",1,xmin,xmax,1,ymin,ymax);
   hdummy->GetXaxis()->SetTitle("p_{T} (GeV/c)");
   hdummy->GetYaxis()->SetTitle("v_{3}");
   hdummy->Draw();
-  tgae_ppg191->Draw("L3");
+  //tgae_ppg191->Draw("L3");
+  tgae_p216_sys->Draw("pz");
+  tge_p216_stat->Draw("p");
   tge_v3_raw->Draw("p");
-  if ( is_CNT_BBCS_FVTS ) tg_sy_CNT_BBCS_FVTS_raw->Draw("l");
-  if ( is_CNT_FVTN_FVTS ) tg_sy_CNT_FVTN_FVTS_raw->Draw("l");
+  // if ( is_CNT_BBCS_FVTS ) tg_sy_CNT_BBCS_FVTS_raw->Draw("l");
+  // if ( is_CNT_FVTN_FVTS ) tg_sy_CNT_FVTN_FVTS_raw->Draw("l");
   TLegend* leg = new TLegend(0.18,0.65,0.38,0.92);
   leg->SetHeader(name);
-  if ( is_CNT_BBCS_FVTS ) leg->AddEntry(tg_sy_CNT_BBCS_FVTS_raw,"raw v_{3} (Seyoung)","l");
-  if ( is_CNT_FVTN_FVTS ) leg->AddEntry(tg_sy_CNT_FVTN_FVTS_raw,"raw v_{3} (Seyoung)","l");
+  // if ( is_CNT_BBCS_FVTS ) leg->AddEntry(tg_sy_CNT_BBCS_FVTS_raw,"raw v_{3} (Seyoung)","l");
+  // if ( is_CNT_FVTN_FVTS ) leg->AddEntry(tg_sy_CNT_FVTN_FVTS_raw,"raw v_{3} (Seyoung)","l");
   leg->AddEntry(tge_v3_raw,"raw v_{3}","p");
   leg->Draw();
   TLine* line = new TLine(xmin,0,xmax,0);
@@ -331,7 +360,7 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
   line->Draw();
   c1->Print(Form("PlotFigs/syh_dAu_v3_%s.png",name));
   tge_v3_subA->Draw("p");
-  if ( is_CNT_FVTN_FVTS ) tg_sy_CNT_FVTN_FVTS_sub->Draw("l");
+  //  if ( is_CNT_FVTN_FVTS ) tg_sy_CNT_FVTN_FVTS_sub->Draw("l");
   leg->AddEntry(tge_v3_subA,"sub v_{3} (ATLAS)","p");
   c1->Print(Form("PlotFigs/syh_dAu_v3_%s_sub1.png",name));
   tge_v3_subAZ->Draw("p");
