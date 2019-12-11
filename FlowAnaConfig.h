@@ -313,7 +313,7 @@ void FlowAnaConfig::print() const {
     cout << "dEta cut: " << endl;
     cout << "\t" << getEtaRangeLow() << " < |dEta| < " << getEtaRangeHigh() << endl;
     cout << "associate particle selection: " << endl;
-    cout << "\t" << getAssoPtLow() << " < pt^{asso} < " << getAssoPtLow() << " GeV" << endl;
+    cout << "\t" << getAssoPtLow() << " < pt^{asso} < " << getAssoPtHigh() << " GeV" << endl;
     cout << "----------------------------------------------------" << endl;
     cout << endl;
 }

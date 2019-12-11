@@ -54,9 +54,9 @@ void testSimple() {
     c1->SaveAs("test.pdf");
     // add addtional lengends
     
-    //TCanvas* c2 = new TCanvas("c2","scaling",50,50, 600,600);
-    //subTool.plotAtlasLM(c2);
-    //c2->cd();
+    TCanvas* c2 = new TCanvas("c2","scaling",50,50, 600,600);
+    subTool.plotAtlasLM(c2);
+    c2->cd();
     // add addtional lengends
 
 }

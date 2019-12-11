@@ -168,7 +168,7 @@ float CorrelationMaker::weight295(int index_Nch) {
     // use 1./lumi for this analysis
     float _lumi = 1.;
     if (index_Nch<14) _lumi = 0.004155;
-    else if (index_Nch<20) _lumi = 0.064152;
+    else if (index_Nch<20) _lumi = 0.060830;
     else if (index_Nch<24) _lumi = 0.376292;
     else _lumi = 2.719786;
     return 1./_lumi;
@@ -191,7 +191,7 @@ float CorrelationMaker::weight435AnaSel(int index_Nch) {
     // use 1./lumi for this analysis
     float _lumi = 1.;
     if (index_Nch<14) _lumi = 0.016328;
-    else if (index_Nch<20) _lumi = 0.002155;
+    else if (index_Nch<20) _lumi = 0.0020476;
     else if (index_Nch<24) _lumi = 0.262875;
     else _lumi = 0.262595;
     return 1./_lumi;
@@ -261,9 +261,12 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
                     // nEvent is calculated from raw 1D multiplicity distribution
                     // only consequence would be slightly underestimation <Ntrig> due to too large Nevt including events without particle passing trigger selection
                     // still better than no error correction
-                    int _Nch_bin_low  = h1_raw_Nch->FindBin(_Nch_low);
-                    int _Nch_bin_high = h1_raw_Nch->FindBin(_Nch_high);
-                    float _nEvt = h1_raw_Nch->Integral(_Nch_bin_low, _Nch_bin_high);
+                    int _nEvt = 0;
+                    if (h1_raw_Nch) {
+                        int _Nch_bin_low  = h1_raw_Nch->FindBin(_Nch_low);
+                        int _Nch_bin_high = h1_raw_Nch->FindBin(_Nch_high);
+                        _nEvt = h1_raw_Nch->Integral(_Nch_bin_low, _Nch_bin_high);
+                    }
 
                     // error correction for double counting based on effective sample size
                     float _Neff_trig = pow(h2_nsig->GetBinContent(ipt+1, iNch+1)/h2_nsig->GetBinError(ipt+1, iNch+1), 2)/_nEvt;
@@ -316,7 +319,7 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
             // to be extend to support other analysis
             htemp_1->Scale(_weight);
             if (htemp_2) htemp_2->Scale(_weight);
-            nsig += h2_nsig->GetBinContent(ipt+1, iNch+1) * _weight;
+            nsig    += h2_nsig   ->GetBinContent(ipt+1, iNch+1) * _weight;
             nsigMix += h2_nsigMix->GetBinContent(ipt+1, iNch+1) * _weight;
 
             // apply stat error correction here
@@ -329,13 +332,27 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
                 h1->Add(htemp_1);
                 if (htemp_2) h2->Add(htemp_2);
 	        }
-	        delete htemp_1;
-	        delete htemp_2;
-	        if (m_debug) cout << "pt index = " << ipt << ", Nch index = " << iNch << endl;
+
+	        if (m_debug) {
+                cout << "pt index = " << ipt << ", Nch index = " << iNch << endl;
+                cout << "\tintegrated evt countst, current hist = " << htemp_1->Integral() << endl;
+                cout << "\tevt counts for test, current hist = " << htemp_1->GetBinContent(10,10) << endl;
+                cout << "\tstat error for test, current hist = " << 100* htemp_1->GetBinError(10,10) / htemp_1->GetBinContent(10,10) << endl;
+                cout << "-------------------" << endl;
+                cout << "\tintegrated evt countst, merged hist = " << h1->Integral() << endl;
+                cout << "\tevt counts for test, merged hist  = " << h1->GetBinContent(10,10) << endl;
+                cout << "\tstat error for test, merged hist  = " << 100* h1->GetBinError(10,10) / h1->GetBinContent(10,10) << endl;
+            }
+
+	        //if (htemp_1) {delete htemp_1; htemp_1 =0;}
+	        //if (htemp_2) {delete htemp_2; htemp_2 =0;}
 
         }
     }
-    if (m_debug) cout << "Merged same event entries: " << h1->GetEntries()/1e6 << "M" << endl;
+    if (m_debug) {
+        cout << "Merged same  event entries: " << h1->Integral()/1e6 << "M" << endl;
+        cout << "Merged mixed event entries: " << h2->Integral()/1e6 << "M" << endl;
+    }
 
     TH1* hphi;
 
@@ -437,6 +454,13 @@ TH1* CorrelationMaker::MakeCorr(float _pt_low, float _pt_high, float _Nch_low, f
 
         hphi = (TH1*)m_h1_sig->Clone(Form("_hphi"));
         hphi->Scale(1./nsig, "width"); //per trigger & per deltaPhi yield
+
+    } else if (method == 6) {
+        // 1D projection with out any normalization
+        m_h1_sig    = h1->ProjectionY(Form("h_sig_phi_Nch%d",  index_Nch_low), 0.00001 + m_etaBinIndexLow,    0.00001 + m_jetEtaIndexLow-1, "e" );
+        m_h1_sig->Add(h1->ProjectionY(Form("h_sig_phi2_Nch%d", index_Nch_low), 0.00001 + m_jetEtaIndexHigh+1, 0.00001 + m_etaBinIndexHigh,  "e" ) );
+        hphi = (TH1*)m_h1_sig->Clone(Form("_hphi"));
+        hphi->Scale(1., "width"); //per trigger & per deltaPhi yield
 
     } else {
         cout << "method is not supported, please choose from 1~3" << endl;
@@ -1667,13 +1691,13 @@ void CorrelationMaker::Plot2DCorrelation(TH2* h1, TCanvas* c1) {
     h1->GetXaxis()->SetNdivisions(505,kTRUE);
     h1->GetXaxis()->SetTitle("#Delta#it{#eta}");
     h1->GetYaxis()->SetTitle("#Delta#it{#phi}");
-    h1->GetZaxis()->SetTitle("#it{Y}(#Delta#it{#phi}, #Delta#it{#eta})");
+    h1->GetZaxis()->SetTitle("#it{C}(#Delta#it{#phi}, #Delta#it{#eta})");
     h1->GetXaxis()->CenterTitle();
     h1->GetYaxis()->CenterTitle();
     h1->GetZaxis()->CenterTitle();
-    h1->GetZaxis()->SetTitleOffset(1.20);
+    h1->GetZaxis()->SetTitleOffset(1.60);
     h1->Draw("SURF1FB");
-    ATLASLabel(0.02,0.94,"Internal");
+    //ATLASLabel(0.02,0.94,"Internal");
     //myText(    0.02,0.89,1,"#it{p}+Pb #sqrt{#it{s}_{NN}} = 8.16 TeV");
     //myText(    0.02,0.83,1,"#it{h}-#it{h} Correlation");
     //myText(    0.02,0.12,1,"0.5 < #it{p}_{T}^{trig,asso} < 5 GeV");
