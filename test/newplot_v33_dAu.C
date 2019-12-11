@@ -318,7 +318,7 @@ void arguments(int indexA, int indexB, int indexC, const char* name)
   //tgae_p216_sys->Draw("pz");
   TGraphErrors* tge_p216_stat = new TGraphErrors(10,p216_x,p216_y,0,p216_ey);
   tge_p216_stat->SetMarkerColor(kBlack);
-  tge_p216_stat->SetMarkerStyle(kFullCircle);
+  tge_p216_stat->SetMarkerStyle(kOpenCross);
   //tge_p216_stat->Draw("p");
 
   TGraph* tg_sy_CNT_BBCS_FVTS_raw = new TGraph(nptbins,ptvalues,seyoungdata_CNT_BBCS_FVTS_raw);
