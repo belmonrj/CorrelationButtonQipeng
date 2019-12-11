@@ -118,7 +118,7 @@ void ratiod()
       leg->AddEntry(tge_lmratio_subR[itype],handle[itype].c_str(),"p");
     }
   leg->Draw();
-  c1->Print("PlotFigs/fig_lm_ratio.png");
+  c1->Print("PlotFigs/fig_pAu_lm_ratio.png");
 
   // --
 
@@ -194,12 +194,12 @@ void ratiod()
   c1->cd();
   line->Draw();
   leg->Draw();
-  c1->Print("PlotFigs/fig_raw_type_ratio.png");
+  c1->Print("PlotFigs/fig_pAu_raw_type_ratio.png");
   // ---
   c2->cd();
   line->Draw();
   leg->Draw();
-  c2->Print("PlotFigs/fig_subR_type_ratio.png");
+  c2->Print("PlotFigs/fig_pAu_subR_type_ratio.png");
 
   TGraphErrors* tge_v2_raw[ntypes];
   TGraphErrors* tge_v2_subR[ntypes];
@@ -242,11 +242,11 @@ void ratiod()
   c1->cd();
   line->Draw();
   leg->Draw();
-  c1->Print("PlotFigs/fig_raw_v2_comparison.png");
+  c1->Print("PlotFigs/fig_pAu_raw_v2_comparison.png");
   // ---
   c2->cd();
   line->Draw();
   leg->Draw();
-  c2->Print("PlotFigs/fig_subR_v2_comparison.png");
+  c2->Print("PlotFigs/fig_pAu_subR_v2_comparison.png");
 
 }
