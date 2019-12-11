@@ -144,14 +144,14 @@ void testSimple(TH1D* h_correlation_LM, TH1D* h_correlation_HM, TH1D* h_correlat
     //--------------------------------------------------
     // Access the fitted results and plots
     //--------------------------------------------------
-    //theResult.getV22RawValue()
-    //cout << "v22 = " << theResult.getV22RawValue() << " +/- " << theResult.getV22RawError() << endl;
-    cout << "v22 = " << theResult.getV22RawValue() << " +/- " << theResult.getV22RawError() << " and "; // raw
-    cout << "v22subA = " << theResult.getV22SubValue() << " +/- " << theResult.getV22SubError() << " and "; // ATLAS no ZYAM sub
-    cout << "v22subAZ = " << theResult2.getV22SubValue() << " +/- " << theResult2.getV22SubError() << " and "; // ATLAS with ZYAM sub
-    cout << "v22subRZ = " << theResultRZ.getV22SubValue() << " +/- " << theResultRZ.getV22SubError() << " and "; // ATLAS with ZYAM sub
-    cout << "v22subR = " << theResultR.getV22SubValue() << " +/- " << theResultR.getV22SubError() << endl; // Reference fitting method
-    //cout << "Improved v22 = " << theResult.getV22SubImpValue() << " +/- " << theResult.getV22SubImpError() << endl; // 3 histos instead of 2, ATLAS improved method
+    //theResult.getCoeffRawValue(2)
+    //cout << "v22 = " << theResult.getCoeffRawValue(2) << " +/- " << theResult.getCoeffRawError(2) << endl;
+    cout << "v22 = " << theResult.getCoeffRawValue(2) << " +/- " << theResult.getCoeffRawError(2) << " and "; // raw
+    cout << "v22subA = " << theResult.getCoeffSubValue(2) << " +/- " << theResult.getCoeffSubError(2) << " and "; // ATLAS no ZYAM sub
+    cout << "v22subAZ = " << theResult2.getCoeffSubValue(2) << " +/- " << theResult2.getCoeffSubError(2) << " and "; // ATLAS with ZYAM sub
+    cout << "v22subRZ = " << theResultRZ.getCoeffSubValue(2) << " +/- " << theResultRZ.getCoeffSubError(2) << " and "; // ATLAS with ZYAM sub
+    cout << "v22subR = " << theResultR.getCoeffSubValue(2) << " +/- " << theResultR.getCoeffSubError(2) << endl; // Reference fitting method
+    //cout << "Improved v22 = " << theResult.getCoeffSubImpValue(2) << " +/- " << theResult.getCoeffSubImpError(2) << endl; // 3 histos instead of 2, ATLAS improved method
 
     //TCanvas* c1 = new TCanvas("c1","scaling",50,50, 600,700);
     //TCanvas* c1 = new TCanvas("c1","scaling",50,50, 600,600);
